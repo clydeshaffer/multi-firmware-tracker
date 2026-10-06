@@ -40,6 +40,8 @@ typedef struct track_event {
 vector<vector<track_event>> patternTable;
 vector<vector<int>> songTable;
 
+int channelTimes[32];
+
 #define PITCH_TABLE_LENGTH 216
 uint8_t pitch_table[PITCH_TABLE_LENGTH] = {
     0x00, 0x4D, 0x00, 0x51, 0x00, 0x56, 0x00, 0x5B, 0x00, 0x61, 0x00, 0x66, 0x00, 0x6C, 0x00, 0x73, 0x00, 0x7A, 0x00, 0x81, 0x00, 0x89, 0x00, 0x91,
@@ -65,6 +67,23 @@ int octave = 4;
 const char* noteNames[] = {
     "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-", "--"
 };
+
+void play_note(int channel, int note) {
+    note -= 12;
+    soundcard->ram_write(0x10 + (channel*4), pitch_table[note*2]);
+    soundcard->ram_write(0x20 + (channel*4), pitch_table[(note*2)+1]);
+    soundcard->ram_write(0x11 + (channel*4), pitch_table[note*2]);
+    soundcard->ram_write(0x21 + (channel*4), pitch_table[(note*2)+1]);
+    soundcard->ram_write(0x12 + (channel*4), pitch_table[note*2]);
+    soundcard->ram_write(0x22 + (channel*4), pitch_table[(note*2)+1]);
+    soundcard->ram_write(0x13 + (channel*4), pitch_table[note*2]);
+    soundcard->ram_write(0x23 + (channel*4), pitch_table[(note*2)+1]);
+    soundcard->ram_write(0x30 + (channel*4), 128);
+    soundcard->ram_write(0x31 + (channel*4), 128);
+    soundcard->ram_write(0x32 + (channel*4), 0);
+    soundcard->ram_write(0x33 + (channel*4), 0);
+    channelTimes[channel] = 1;
+}
 
 int main(int argC, char* argV[]) {
     SDL_Init(SDL_INIT_VIDEO);
@@ -92,6 +111,9 @@ int main(int argC, char* argV[]) {
     int songLengthInPatterns = 1;
     int patternRows = 64;
     bool recording = false;
+    bool playing = false;
+    int playingStepTimer = 0;
+    int playingStepTime = 250;
 
     for(int c = 0; c < numChannels; ++c) { 
         vector<track_event> initial_blank_pattern;
@@ -108,6 +130,8 @@ int main(int argC, char* argV[]) {
         vector<int> initial_frame;
         initial_frame.emplace_back(0);
         songTable.emplace_back(initial_frame);
+
+        channelTimes[c] = 0;
     }
 
     soundcard = new AudioCoprocessor();
@@ -132,8 +156,12 @@ int main(int argC, char* argV[]) {
     soundcard->ram_write(0x3D, 128);
     soundcard->ram_write(0x3E, 128);
     soundcard->ram_write(0x3F, 128);
+    uint64_t ticks = SDL_GetTicks64();
 
     while(!quit) {
+        uint64_t lastTicks = ticks;
+        ticks = SDL_GetTicks64();
+        uint64_t deltaTicks = ticks - lastTicks;
         //Handle events on queue
         while( SDL_PollEvent( &e ) != 0 )
         {
@@ -142,8 +170,8 @@ int main(int argC, char* argV[]) {
             {
                 quit = true;
             }
-            if(recording) {
-                if(e.type == SDL_KEYDOWN) {
+            if(e.type == SDL_KEYDOWN) {
+                if(recording) {
                     int noteNum = 255;
                     if((e.key.keysym.sym >= SDLK_a) && (e.key.keysym.sym <= SDLK_z)) {
                         noteNum = keynotes_az[e.key.keysym.sym - SDLK_a];
@@ -154,24 +182,83 @@ int main(int argC, char* argV[]) {
                         noteNum += (octave+1)*12;
                         patternTable.at(selectedPatColIdx).at(selectedPatRowIdx).note = noteNum;
                         patternTable.at(selectedPatColIdx).at(selectedPatRowIdx).instrument = 0;
-                        ++selectedPatRowIdx;
-                        soundcard->ram_write(0x10, pitch_table[noteNum*2]);
-                        soundcard->ram_write(0x20, pitch_table[(noteNum*2)+1]);
-                        soundcard->ram_write(0x11, pitch_table[noteNum*2]);
-                        soundcard->ram_write(0x21, pitch_table[(noteNum*2)+1]);
-                        soundcard->ram_write(0x12, pitch_table[noteNum*2]);
-                        soundcard->ram_write(0x22, pitch_table[(noteNum*2)+1]);
-                        soundcard->ram_write(0x13, pitch_table[noteNum*2]);
-                        soundcard->ram_write(0x23, pitch_table[(noteNum*2)+1]);
-                        soundcard->ram_write(0x30, 128);
-                        soundcard->ram_write(0x31, 128);
-                        soundcard->ram_write(0x32, 0);
-                        soundcard->ram_write(0x33, 0);
+                        if(!playing) {
+                            ++selectedPatRowIdx;
+                        }
+                        play_note(selectedPatColIdx, noteNum);
+                    } else if(e.key.keysym.sym == SDLK_DELETE) {
+                        patternTable.at(selectedPatColIdx).at(selectedPatRowIdx).note = 255;
+                        if(!playing) {
+                            ++selectedPatRowIdx;
+                        }
                     }
                 }
+                if(e.key.keysym.sym == SDLK_DOWN) {
+                    ++selectedPatRowIdx;
+                    if(selectedPatRowIdx == patternRows) {
+                        selectedPatRowIdx = 0;
+                    }
+                } else if(e.key.keysym.sym == SDLK_UP) {
+                    if(selectedPatRowIdx == 0) {
+                        selectedPatRowIdx = patternRows;
+                    }
+                    --selectedPatRowIdx;
+                    
+                } else if(e.key.keysym.sym == SDLK_SPACE) {
+                    recording = !recording;
+                } else if(e.key.keysym.sym == SDLK_RETURN) {
+                    playing = !playing;
+                    if(playing) {
+                        playingStepTime = 0;
+                    }
+                    selectedPatRowIdx = 0;
+                } else if(e.key.keysym.sym == SDLK_RIGHT) {
+                    ++selectedPatColIdx;
+                    if(selectedPatColIdx == numChannels) {
+                        selectedPatColIdx = 0;
+                    }
+                } else if(e.key.keysym.sym == SDLK_LEFT) {
+                    if(selectedPatColIdx == 0) {
+                        selectedPatColIdx = numChannels;
+                    }
+                    --selectedPatColIdx;
+                }
+                if(selectedPatRowIdx < 0) selectedPatRowIdx = patternRows - 1;
+                else if(selectedPatRowIdx == patternRows) selectedPatRowIdx = 0;
             }
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
+
+        for(int i = 0; i < numChannels; ++i) {
+            if(channelTimes[i]) {
+                channelTimes[i] += deltaTicks;
+                if(channelTimes[i] < 500)
+                soundcard->ram_write(0x32 + (i*4), 128 * channelTimes[i]/500);
+                soundcard->ram_write(0x33 + (i*4), 128 * channelTimes[i]/1000);
+                if(channelTimes[i] >= 1000) { 
+                    channelTimes[i] = 0; 
+                    soundcard->ram_write(0x33 + (i*4), 128);
+                }
+            }
+        }
+
+        if(playing) {
+            playingStepTimer += deltaTicks;
+            if(playingStepTimer >= playingStepTime) {
+                playingStepTimer -= playingStepTime;
+                for(int col = 0; col < numChannels; ++col) {
+                    int noteNum = patternTable.at(col).at(selectedPatRowIdx).note;
+                    if(noteNum != 255) {
+                        play_note(col, noteNum);
+                    }
+                }
+                ++selectedPatRowIdx;
+                if(selectedPatRowIdx >= patternRows) {
+                    selectedPatRowIdx = 0;
+                }
+            }
+        }
+
 
         ImGui::SetCurrentContext(main_imgui_ctx);
         ImGui_ImplSDLRenderer2_NewFrame();
@@ -204,6 +291,18 @@ int main(int argC, char* argV[]) {
             recording = !recording;
         }
         ImGui::PopStyleColor();
+
+        if(playing) {
+            if(ImGui::Button("stop")) {
+                playing = false;
+            }
+        } else {
+            if(ImGui::Button("play")) {
+                playing = true;
+                playingStepTime = 0;
+            }
+        }
+    
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
         ImGui::BeginChild("sequences", ImVec2(0, 128), ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AlwaysUseWindowPadding);
