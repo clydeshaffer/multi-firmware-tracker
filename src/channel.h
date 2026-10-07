@@ -6,6 +6,7 @@
 #include "processStep.h"
 #include "memWrite.h"
 #include "eventParam.h"
+#include "patterns.h"
 
 class ChannelTemplate {
     public:
@@ -27,6 +28,7 @@ class Channel {
     int lastInstrumentIndex = -1;  
     std::vector<int> lastEventParams;  
     int framesSinceNote;
+    PatternLibrary patterns;
     std::vector<MemWrite> processNoteHit(int channelIdx, std::vector<int> params,int instrumentIdx);
     std::vector<MemWrite> processNoteTick(int channelIdx);
 };

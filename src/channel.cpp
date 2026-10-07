@@ -63,6 +63,10 @@ void ChannelTemplate::renderConfigUI() {
 }
 
 std::vector<MemWrite> Channel::processNoteHit(int channelIdx, std::vector<int> params, int instrumentIdx) {
+    if((instrumentIdx < 0) || (instrumentIdx >= base.instruments.size())) {
+        std::vector<MemWrite> out;
+        return out;
+    }
     framesSinceNote = 0;
     lastEventParams = params;
     lastInstrumentIndex = instrumentIdx;
@@ -82,7 +86,7 @@ std::vector<MemWrite> Channel::processNoteHit(int channelIdx, std::vector<int> p
 }
 
 std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
-    if(lastInstrumentIndex < 0) {
+    if((lastInstrumentIndex < 0) || (lastInstrumentIndex >= base.instruments.size())) {
         std::vector<MemWrite> out;
         return out;
     }

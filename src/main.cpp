@@ -18,6 +18,7 @@
 #include "implot.h"
 #include "imgui/backends/imgui_impl_sdl2.h"
 #include "imgui/backends/imgui_impl_sdlrenderer2.h"
+#include "imgui/misc/cpp/imgui_stdlib.h"
 
 #include "audio_coprocessor.h"
 
@@ -39,16 +40,6 @@ ChannelTemplate mainChannelTemplate;
 vector<Channel> channelStates;
 
 
-typedef struct track_event {
-    uint8_t note;
-    uint8_t instrument;
-    uint8_t volume;
-    uint8_t fx;
-} track_event;
-
-vector<vector<track_event>> patternTable;
-vector<vector<int>> songTable;
-
 int selectedSeqRowIdx = 0;
 int selectedSeqColIdx = 0;
 int selectedPatRowIdx = 0;
@@ -56,9 +47,7 @@ int selectedPatColIdx = 0;
 int numChannels = 4;
 int songLengthInPatterns = 1;
 
-int channelTimes[32];
-
-int patternRows = 32;
+int patternLengthInRows = 32;
 bool recording = false;
 bool playing = false;
 int playingStepTimer = 0;
@@ -85,6 +74,7 @@ int keynotes_09[10] = {
 };
 
 int octave = 4;
+int selectedInstrumentIdx = 0;
 
 const char* noteNames[] = {
     "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-", "--"
@@ -100,25 +90,11 @@ void runWriteList(vector<MemWrite> writes) {
     }
 }
 
-void playNote(int channel, int note) {
-   /* note -= 36;
-    soundcard->ram_write(0x10 + (channel*4), pitch_table[note*2]);
-    soundcard->ram_write(0x20 + (channel*4), pitch_table[(note*2)+1]);
-    soundcard->ram_write(0x11 + (channel*4), pitch_table[(note+12)*2]);
-    soundcard->ram_write(0x21 + (channel*4), pitch_table[((note+12)*2)+1]);
-    soundcard->ram_write(0x12 + (channel*4), pitch_table[(note+12)*2]);
-    soundcard->ram_write(0x22 + (channel*4), pitch_table[((note+12)*2)+1]);
-    soundcard->ram_write(0x13 + (channel*4), pitch_table[note*2]);
-    soundcard->ram_write(0x23 + (channel*4), pitch_table[(note*2)+1]);
-    soundcard->ram_write(0x30 + (channel*4), envelopes[0][0]);
-    soundcard->ram_write(0x31 + (channel*4), envelopes[1][0]);
-    soundcard->ram_write(0x32 + (channel*4), envelopes[2][0]);
-    soundcard->ram_write(0x33 + (channel*4), envelopes[3][0]);
-    channelTimes[channel] = 0;*/
+void playNote(int channel, int note, int instrument) {
     vector<int> params;
     params.emplace_back(note);
     params.emplace_back(0);
-    auto noteHitWrites = channelStates[channel].processNoteHit(channel, params, 0);
+    auto noteHitWrites = channelStates[channel].processNoteHit(channel, params, instrument);
     auto noteTickWrites = channelStates[channel].processNoteTick(channel);
 
     runWriteList(noteHitWrites);
@@ -127,12 +103,6 @@ void playNote(int channel, int note) {
 
 void tickChannels() {
     for(int i = 0; i < numChannels; ++i) {
-        /*if(channelTimes[i] < MAX_ENVELOPE_LENGTH) ++channelTimes[i];
-        for(int envIdx = 0; envIdx < 4; ++envIdx) {
-            if(channelTimes[i] < envelopeLengths[envIdx]) {
-                soundcard->ram_write(0x30 + (i*4) + envIdx, envelopes[envIdx][channelTimes[i]]);
-            }
-        }*/
         auto noteTickWrites = channelStates[i].processNoteTick(i);
         runWriteList(noteTickWrites);
     }
@@ -144,13 +114,17 @@ void tickPlayback() {
         if(playingStepTimer >= playingStepTime) {
             playingStepTimer -= playingStepTime;
             for(int col = 0; col < numChannels; ++col) {
-                int noteNum = patternTable[col][selectedPatRowIdx].note;
-                if(noteNum != 255) {
-                    playNote(col, noteNum);
+                vector<int> te = channelStates[col].patterns.getEvent(channelStates[col].patterns.patternSequence[selectedSeqRowIdx], selectedPatRowIdx);
+                if(te[0] != 255) {
+                    playNote(col, te[0], te[1]);
                 }
             }
             ++selectedPatRowIdx;
-            if(selectedPatRowIdx >= patternRows) {
+            if(selectedPatRowIdx >= patternLengthInRows) {
+                ++selectedSeqRowIdx;
+                if(selectedSeqRowIdx >= songLengthInPatterns) {
+                    selectedSeqRowIdx = 0;
+                }
                 selectedPatRowIdx = 0;
             }
         }
@@ -170,6 +144,39 @@ void musicPlaybackWorkerLoop(std::atomic<bool>& quit) {
 
         nextFrameTime += duration_cast<steady_clock::duration>(frameDuration);
         std::this_thread::sleep_until(nextFrameTime);
+    }
+}
+
+int sprintfNoteName(char* str, int note) {
+    return sprintf(str, "%s%01d", noteNames[note % 12], ((int) (note / 12)) - 1);
+}
+
+void sequenceRowPopup(int row) {
+    if(ImGui::BeginPopupContextItem("row_context_menu")) {
+        if(ImGui::MenuItem("Insert Frame")) {
+            for(auto& channel : channelStates) {
+                int num = channel.patterns.paramPatterns[0].size();
+                if(channel.patterns.paramPatterns[0].size() <= num) {
+                    channel.patterns.addPattern();
+                }
+                channel.patterns.patternSequence.insert(channel.patterns.patternSequence.begin() + row + 1, num);
+            }
+            ++songLengthInPatterns;
+        }
+        if(ImGui::MenuItem("Duplicate")) {
+            for(auto& channel : channelStates) {
+                int num = channel.patterns.patternSequence[row];
+                channel.patterns.patternSequence.insert(channel.patterns.patternSequence.begin() + row, num);
+            }
+            ++songLengthInPatterns;
+        }
+        if(ImGui::MenuItem("Delete")) {
+            for(auto& channel : channelStates) {
+                channel.patterns.patternSequence.erase(channel.patterns.patternSequence.begin() + row);
+            }
+            --songLengthInPatterns;
+        }
+        ImGui::EndPopup();
     }
 }
 
@@ -305,25 +312,6 @@ int main(int argC, char* argV[]) {
     envelopes[2][15] = 128;
     envelopes[3][15] = 128;
 
-    for(int c = 0; c < numChannels; ++c) { 
-        vector<track_event> initial_blank_pattern;
-        for(int r = 0; r < patternRows; ++r) {
-            track_event te;
-            te.note = 255;
-            te.volume = 255;
-            te.instrument = 255;
-            te.fx = 255;
-            initial_blank_pattern.emplace_back(te);
-        }   
-        patternTable.emplace_back(initial_blank_pattern);
-
-        vector<int> initial_frame;
-        initial_frame.emplace_back(0);
-        songTable.emplace_back(initial_frame);
-
-        channelTimes[c] = MAX_ENVELOPE_LENGTH;
-    }
-
     soundcard = new AudioCoprocessor();
     AudioCoprocessor::singleton_acp_state->isEmulationPaused = false;
     soundcard->register_write(ACP_RESET, 1);
@@ -368,54 +356,88 @@ int main(int argC, char* argV[]) {
                         noteNum = keynotes_az[e.key.keysym.sym - SDLK_a];
                     } else if((e.key.keysym.sym >= SDLK_0) && (e.key.keysym.sym <= SDLK_9)) {
                         noteNum = keynotes_09[e.key.keysym.sym - SDLK_0];
+                    } else {
+                        vector<int> p;
+                        switch(e.key.keysym.sym) {
+                            case SDLK_DELETE:
+                            p.resize(mainChannelTemplate.eventParams.size());
+                            p[0] = 255;
+                            channelStates[selectedPatColIdx].patterns.writeEvent(p, channelStates[selectedPatColIdx].patterns.patternSequence[selectedSeqRowIdx], selectedPatRowIdx);
+                            if(!playing) {
+                                ++selectedPatRowIdx;
+                            }
+                            break;
+                            case SDLK_BACKSPACE:
+                            if(selectedPatRowIdx > 0) {
+                                if(!playing) {
+                                    --selectedPatRowIdx;
+                                }
+                                p.resize(mainChannelTemplate.eventParams.size());
+                                p[0] = 255;
+                                channelStates[selectedPatColIdx].patterns.writeEvent(p, channelStates[selectedPatColIdx].patterns.patternSequence[selectedSeqRowIdx], selectedPatRowIdx);
+                            }
+                            break;
+                        }
                     }
                     if(noteNum != 255) {
                         noteNum += (octave+1)*12;
-                        patternTable[selectedPatColIdx][selectedPatRowIdx].note = noteNum;
-                        patternTable[selectedPatColIdx][selectedPatRowIdx].instrument = 0;
+                        vector<int> p;
+                        p.resize(mainChannelTemplate.eventParams.size());
+                        p[0] = noteNum;
+                        p[1] = selectedInstrumentIdx;
+                        channelStates[selectedPatColIdx].patterns.writeEvent(p, channelStates[selectedPatColIdx].patterns.patternSequence[selectedSeqRowIdx], selectedPatRowIdx);
                         if(!playing) {
                             ++selectedPatRowIdx;
                         }
-                        playNote(selectedPatColIdx, noteNum);
-                    } else if(e.key.keysym.sym == SDLK_DELETE) {
-                        patternTable[selectedPatColIdx][selectedPatRowIdx].note = 255;
-                        if(!playing) {
-                            ++selectedPatRowIdx;
-                        }
+                        playNote(selectedPatColIdx, noteNum, selectedInstrumentIdx);
                     }
                 }
-                if(e.key.keysym.sym == SDLK_DOWN) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_DOWN:
                     ++selectedPatRowIdx;
-                    if(selectedPatRowIdx == patternRows) {
+                    if(selectedPatRowIdx == patternLengthInRows) {
                         selectedPatRowIdx = 0;
                     }
-                } else if(e.key.keysym.sym == SDLK_UP) {
+                    break;
+                    case SDLK_UP:
                     if(selectedPatRowIdx == 0) {
-                        selectedPatRowIdx = patternRows;
+                        selectedPatRowIdx = patternLengthInRows;
                     }
                     --selectedPatRowIdx;
-                    
-                } else if(e.key.keysym.sym == SDLK_SPACE) {
+                    break;
+                    case SDLK_SPACE:
                     recording = !recording;
-                } else if(e.key.keysym.sym == SDLK_RETURN) {
+                    break;
+                    case SDLK_RETURN:
                     playing = !playing;
                     if(playing) {
                         playingStepTimer = 0;
                     }
                     selectedPatRowIdx = 0;
-                } else if(e.key.keysym.sym == SDLK_RIGHT) {
+                    break;
+                    case SDLK_RIGHT:
                     ++selectedPatColIdx;
                     if(selectedPatColIdx == numChannels) {
                         selectedPatColIdx = 0;
                     }
-                } else if(e.key.keysym.sym == SDLK_LEFT) {
-                    if(selectedPatColIdx == 0) {
+                    break;
+                    case SDLK_LEFT:
+                     if(selectedPatColIdx == 0) {
                         selectedPatColIdx = numChannels;
                     }
                     --selectedPatColIdx;
+                    break;
+                    case SDLK_KP_MULTIPLY:
+                    if(octave < 8)
+                        ++octave;
+                    break;
+                    case SDLK_KP_DIVIDE:
+                    if(octave > 0)
+                        --octave;
+                    break;
                 }
-                if(selectedPatRowIdx < 0) selectedPatRowIdx = patternRows - 1;
-                else if(selectedPatRowIdx == patternRows) selectedPatRowIdx = 0;
+                if(selectedPatRowIdx < 0) selectedPatRowIdx = patternLengthInRows - 1;
+                else if(selectedPatRowIdx == patternLengthInRows) selectedPatRowIdx = 0;
             }
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
@@ -464,9 +486,24 @@ int main(int argC, char* argV[]) {
         }
 
         ImGui::InputInt("Frames per step", &playingStepTime, 1, 10);
+        ImGui::InputInt("Octave", &octave, 1, 1);
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
         ImGui::BeginChild("sequences", ImVec2(0, 128), ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AlwaysUseWindowPadding);
+
+        if(ImGui::Button("-##DecPattern")) {
+            if(channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx]) {
+                --channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx];
+            }
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("+##IncPattern")) {
+            if(channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx] >= (channelStates[selectedSeqColIdx].patterns.paramPatterns[0].size() - 1)) {
+                channelStates[selectedSeqColIdx].patterns.addPattern();
+            }
+            ++channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx];
+        }
+
         if(ImGui::BeginTable("sequenceView", numChannels+2, ImGuiTableFlags_Borders | ImGuiTableFlags_NoHostExtendX | ImGuiTableFlags_SizingFixedFit)) {
             for(int tableRowIdx = 0; tableRowIdx < songLengthInPatterns; ++tableRowIdx) { 
                 ImGui::PushID(tableRowIdx);
@@ -480,6 +517,7 @@ int main(int argC, char* argV[]) {
                     selectedSeqRowIdx = tableRowIdx;
                 }
                 ImGui::PopStyleColor();
+                sequenceRowPopup(tableRowIdx);
 
                 if(tableRowIdx == selectedSeqRowIdx) {
                     ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.7f, 1.0f));
@@ -494,12 +532,13 @@ int main(int argC, char* argV[]) {
                         ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
                         ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, bg_color);
                     }
-                    sprintf(cellLabel, "%02x", songTable[tableColIdx][tableRowIdx]);
+                    sprintf(cellLabel, "%02x", channelStates[tableColIdx].patterns.patternSequence[tableRowIdx]);
                     if(ImGui::Selectable(cellLabel, (tableRowIdx == selectedSeqRowIdx) && (tableColIdx == selectedSeqColIdx))) {
                         selectedSeqRowIdx = tableRowIdx;
                         selectedSeqColIdx = tableColIdx;
                     }
                     ImGui::PopStyleColor();
+                    sequenceRowPopup(tableRowIdx);
                     ImGui::PopID();
                 }
                 ImGui::PopID();
@@ -510,14 +549,37 @@ int main(int argC, char* argV[]) {
         }
         ImGui::EndChild();
 
+        ImGui::SameLine();
+        if(ImGui::BeginChild("instruments", ImVec2(128, 128), ImGuiChildFlags_Border)) {
+            ImGui::TextUnformatted("Instruments");
+            ImGui::SameLine();
+            if(ImGui::Button("+##AddInstrument")) {
+                mainChannelTemplate.instruments.emplace_back(mainChannelTemplate.templateInstrument.create());
+            }
+            int instrIdx = 0;
+            for(auto& instrument : mainChannelTemplate.instruments) {
+                ImGui::PushID(instrIdx);
+                if(ImGui::Selectable(instrument.name.c_str(), instrIdx == selectedInstrumentIdx)) {
+                    selectedInstrumentIdx = instrIdx;
+                }
+                instrIdx++;
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndChild();
+
+
         ImGui::BeginChild("tracks", ImVec2(0, 0), ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY);
         if(ImGui::BeginTable("trackerView", numChannels+1, ImGuiTableFlags_Borders | ImGuiTableFlags_NoHostExtendX | ImGuiTableFlags_SizingFixedFit)) {
-            for(int tableRowIdx = 0; tableRowIdx < patternRows; ++tableRowIdx) { 
+            for(int tableRowIdx = 0; tableRowIdx < patternLengthInRows; ++tableRowIdx) { 
                 ImGui::PushID(tableRowIdx);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
                 char label[16];
-                char cellLabel[16];
+                char cellLabel[64];
+                char patfmt[8];
+                int paramCnt = mainChannelTemplate.eventParams.size();
+                size_t cellLabelOffset = 0;
                 sprintf(label, "%02x", tableRowIdx);
                 if(ImGui::Selectable(label, tableRowIdx == selectedPatRowIdx, 0)) {
                     selectedPatRowIdx = tableRowIdx;
@@ -530,22 +592,30 @@ int main(int argC, char* argV[]) {
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImGui::GetColorU32(ImVec4(0.2f, 0.2f, 0.2f, 1.0f)));
                 }
                 for(int tableColIdx = 0; tableColIdx < numChannels; ++tableColIdx) {
+                    cellLabelOffset = 0;
                     ImGui::PushID(tableColIdx);
                     ImGui::TableSetColumnIndex(tableColIdx+1);
                     //ImGui::TextUnformatted("--- -- - ---");
-                    track_event te = patternTable[tableColIdx][tableRowIdx];
-                    if(te.note == 255) {
-                        sprintf(cellLabel, "--- -- %01x %02x", te.volume & 15, te.fx);
+                    vector<int> te = channelStates[tableColIdx].patterns.getEvent(channelStates[tableColIdx].patterns.patternSequence[selectedSeqRowIdx], tableRowIdx);
+                    if(te[0] == 255) {
+                        int wid = mainChannelTemplate.eventParams[0].displayWidth;
+                        for(int i = 0; i < wid; ++i) {
+                            cellLabel[cellLabelOffset++] = '-';
+                        }
+                        for(int paramIdx = 1; paramIdx < mainChannelTemplate.eventParams.size(); ++paramIdx) {
+                            int wid = mainChannelTemplate.eventParams[paramIdx].displayWidth;
+                            cellLabel[cellLabelOffset++] = ' ';
+                            for(int i = 0; i < wid; ++i) {
+                                cellLabel[cellLabelOffset++] = '-';
+                            }
+                            
+                        }
                     } else {
-                        sprintf(cellLabel, "%s%01d %02x %01x %02x", noteNames[te.note % 12], ((int) (te.note / 12)) - 1, te.instrument, te.volume & 15, te.fx);
-                    }
-
-                    if(te.volume == 255) {
-                        cellLabel[7] = '-';
-                    }
-                    if(te.fx == 255) {
-                        cellLabel[9] = '-';
-                        cellLabel[10] = '-';
+                        cellLabelOffset = sprintfNoteName(cellLabel, te[0]);
+                        for(int paramIdx = 1; paramIdx < paramCnt; ++paramIdx) {
+                            sprintf(patfmt, " %%0%dx", mainChannelTemplate.eventParams[paramIdx].displayWidth);
+                            cellLabelOffset += sprintf(&cellLabel[cellLabelOffset], patfmt, te[paramIdx]);
+                        }
                     }
                     if(ImGui::Selectable(cellLabel,  (tableRowIdx == selectedPatRowIdx) && (tableColIdx == selectedPatColIdx), 0)) {
                         selectedPatRowIdx = tableRowIdx;
@@ -574,11 +644,8 @@ int main(int argC, char* argV[]) {
 
 
         ImGui::Begin("instrument config");
-        int i = 0;
-        for(auto& instrument : mainChannelTemplate.instruments) {
-            ImGui::PushID(i++);
-            instrument.renderConfigUI();
-            ImGui::PopID();
+        if((selectedInstrumentIdx >= 0) && (selectedInstrumentIdx < mainChannelTemplate.instruments.size())) {
+            mainChannelTemplate.instruments[selectedInstrumentIdx].renderConfigUI();
         }
         ImGui::End();
 

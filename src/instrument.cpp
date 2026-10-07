@@ -1,5 +1,6 @@
 #include "instrument.h"
 #include "imgui.h"
+#include "imgui/misc/cpp/imgui_stdlib.h"
 
 Instrument TemplateInstrument::create() {
     Instrument instr;
@@ -36,6 +37,7 @@ void TemplateInstrument::renderConfigUI() {
 
 void Instrument::renderConfigUI() {
         int i = 0;
+        ImGui::InputText("Name", &name);
         for(auto& envelope : envelopes) {
             ImGui::PushID(i++);
             envelope->draw_instrument_ui();    
