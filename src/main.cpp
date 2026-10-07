@@ -21,6 +21,8 @@
 
 #include "audio_coprocessor.h"
 
+#include "channel.h"
+
 #define WINDOW_TITLE "My SDL imgui app"
 
 using namespace std;
@@ -32,6 +34,10 @@ ImGuiContext* main_imgui_ctx;
 ImPlotContext* main_implot_ctx;
 
 AudioCoprocessor* soundcard;
+
+ChannelTemplate mainChannelTemplate;
+vector<Channel> channelStates;
+
 
 typedef struct track_event {
     uint8_t note;
@@ -88,8 +94,14 @@ const char* noteNames[] = {
 vector<uint8_t> envelopeLengths;
 vector<std::array<uint8_t, MAX_ENVELOPE_LENGTH>> envelopes;
 
+void runWriteList(vector<MemWrite> writes) {
+    for(auto& mw : writes) {
+        soundcard->ram_write(mw.address, mw.value);
+    }
+}
+
 void playNote(int channel, int note) {
-    note -= 36;
+   /* note -= 36;
     soundcard->ram_write(0x10 + (channel*4), pitch_table[note*2]);
     soundcard->ram_write(0x20 + (channel*4), pitch_table[(note*2)+1]);
     soundcard->ram_write(0x11 + (channel*4), pitch_table[(note+12)*2]);
@@ -102,17 +114,27 @@ void playNote(int channel, int note) {
     soundcard->ram_write(0x31 + (channel*4), envelopes[1][0]);
     soundcard->ram_write(0x32 + (channel*4), envelopes[2][0]);
     soundcard->ram_write(0x33 + (channel*4), envelopes[3][0]);
-    channelTimes[channel] = 0;
+    channelTimes[channel] = 0;*/
+    vector<int> params;
+    params.emplace_back(note);
+    params.emplace_back(0);
+    auto noteHitWrites = channelStates[channel].processNoteHit(channel, params, 0);
+    auto noteTickWrites = channelStates[channel].processNoteTick(channel);
+
+    runWriteList(noteHitWrites);
+    runWriteList(noteTickWrites);
 }
 
 void tickChannels() {
     for(int i = 0; i < numChannels; ++i) {
-        if(channelTimes[i] < MAX_ENVELOPE_LENGTH) ++channelTimes[i];
+        /*if(channelTimes[i] < MAX_ENVELOPE_LENGTH) ++channelTimes[i];
         for(int envIdx = 0; envIdx < 4; ++envIdx) {
             if(channelTimes[i] < envelopeLengths[envIdx]) {
                 soundcard->ram_write(0x30 + (i*4) + envIdx, envelopes[envIdx][channelTimes[i]]);
             }
-        }
+        }*/
+        auto noteTickWrites = channelStates[i].processNoteTick(i);
+        runWriteList(noteTickWrites);
     }
 }
 
@@ -151,20 +173,6 @@ void musicPlaybackWorkerLoop(std::atomic<bool>& quit) {
     }
 }
 
-void drawEnvelopeArrayUI(int envNum) {
-    ImGui::Text("Operator %d", envNum);
-    ImGui::PushID(envNum);\
-    for(int i = 0; i < envelopeLengths[envNum]; ++i) {
-        ImGui::PushID(i);
-        char label[16];
-        uint8_t min = 0, max = 128;
-        if(i > 0) ImGui::SameLine();
-        ImGui::VSliderScalar("##envSlider",ImVec2(8,64), ImGuiDataType_U8, &(envelopes[envNum][i]), &min, &max, nullptr, ImGuiSliderFlags_AlwaysClamp);
-        ImGui::PopID();
-    }
-    ImGui::PopID();
-}
-
 int main(int argC, char* argV[]) {
     SDL_Init(SDL_INIT_VIDEO);
 	atexit(SDL_Quit);
@@ -188,6 +196,92 @@ int main(int argC, char* argV[]) {
     //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
     //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
     //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
+
+    channelStates.emplace_back(Channel(mainChannelTemplate));
+    channelStates.emplace_back(Channel(mainChannelTemplate));
+    channelStates.emplace_back(Channel(mainChannelTemplate));
+    channelStates.emplace_back(Channel(mainChannelTemplate));
+
+    mainChannelTemplate.templateInstrument.name = "FM Instrument";
+    ArrayEnvSourceSpec templateArrayEnv[4];
+    NamedInstrumentParamTemplate niptOpNoteAdj[4];
+    for(int i = 0; i < 4; ++i) {
+        templateArrayEnv[i].min = 0;
+        templateArrayEnv[i].max = 16;
+        sprintf(templateArrayEnv[i].name, "Operator %d Volume", i);
+        mainChannelTemplate.templateInstrument.envelopes.emplace_back(&templateArrayEnv[i]);
+
+        
+        sprintf(niptOpNoteAdj[i].name, "Op %d Note Offset", i);
+        niptOpNoteAdj[i].min = -128;
+        niptOpNoteAdj[i].max = 128;
+        mainChannelTemplate.templateInstrument.params.emplace_back(niptOpNoteAdj[i]);
+    }
+
+    mainChannelTemplate.instruments.emplace_back(mainChannelTemplate.templateInstrument.create());
+
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op1 Pitch MSB", 0x10));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op2 Pitch MSB", 0x11));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op3 Pitch MSB", 0x12));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op4 Pitch MSB", 0x13));
+
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op1 Pitch LSB", 0x20));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op2 Pitch LSB", 0x21));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op3 Pitch LSB", 0x22));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op4 Pitch LSB", 0x23));
+
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op1 Amplitude", 0x30));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op2 Amplitude", 0x31));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op3 Amplitude", 0x32));
+    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op4 Amplitude", 0x33));
+
+    mainChannelTemplate.eventParams.emplace_back(EventParam("Note", 1, 3));
+    mainChannelTemplate.eventParams.emplace_back(EventParam("Instrument", 1, 2));
+
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(0));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(0, true));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(4, false));
+
+    
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(1));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(1, true));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(5, false));
+    
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(2));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(2, true));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(6, false));
+    
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(3));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(3, true));
+    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(7, false));
+
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(8, false));
+
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(1));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(9, false));
+
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(2));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(10, false));
+
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(3));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
+    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(11, false));
 
     envelopes.resize(4);
     envelopeLengths.resize(4);
@@ -475,10 +569,17 @@ int main(int argC, char* argV[]) {
         if(ImGui::InputInt("Channels", &numChannels, 1, 1, 0)) {
             if(numChannels < 1) numChannels = 1;
         }
-        drawEnvelopeArrayUI(0);
-        drawEnvelopeArrayUI(1);
-        drawEnvelopeArrayUI(2);
-        drawEnvelopeArrayUI(3);
+        mainChannelTemplate.renderConfigUI();
+        ImGui::End();
+
+
+        ImGui::Begin("instrument config");
+        int i = 0;
+        for(auto& instrument : mainChannelTemplate.instruments) {
+            ImGui::PushID(i++);
+            instrument.renderConfigUI();
+            ImGui::PopID();
+        }
         ImGui::End();
 
         ImGui::Render();
@@ -489,4 +590,5 @@ int main(int argC, char* argV[]) {
     if(musicPlaybackThread.joinable()) {
         musicPlaybackThread.join();
     }
+    return 0;
 }
