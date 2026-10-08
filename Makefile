@@ -98,10 +98,13 @@ endif
 
 $(OUT_DIR)/$(ZIP_NAME): bin
 	@mkdir -p $(@D)/img
+	cp song.mft $(OUT_DIR)
+	cp fm_firmware.bin $(OUT_DIR)
+	cp fm_firmware.ini $(OUT_DIR)
 ifeq ($(OS), Windows_NT)
 	cp $(SDL_ROOT)/bin/SDL2.dll $(OUT_DIR)
 endif
-	cd $(OUT_DIR); zip -9 -y -r -q $(ZIP_NAME) $(BIN_NAME) SDL2.dll img commit_hash.txt
+	cd $(OUT_DIR); zip -9 -y -r -q $(ZIP_NAME) $(BIN_NAME) SDL2.dll img commit_hash.txt song.mft fm_firmware.bin fm_firmware.ini
 
 $(OUT_DIR)/%.cpp.o: %.cpp
 	@mkdir -p $(@D)
