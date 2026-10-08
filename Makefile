@@ -52,7 +52,7 @@ ifeq ($(OS), Windows_NT)
 	endif
 	BIN_NAME := $(BIN_NAME).exe
 
-	ZIP_NAME = bin/GTE_Win32$(TAG).zip
+	ZIP_NAME = bin/MFT_Win32$(TAG).zip
 	SDL_ROOT = ../SDL2-2.26.2/x86_64-w64-mingw32
 
 	#INCLUDE_PATHS specifies the additional include paths we'll need
