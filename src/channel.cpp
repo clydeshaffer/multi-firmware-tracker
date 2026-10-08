@@ -1,6 +1,7 @@
 #include "channel.h"
 #include "imgui.h"
 #include "hash.h"
+#include "serializationUtil.h"
 
 void ChannelTemplate::renderConfigUI() {
     int i = 0;
@@ -108,6 +109,14 @@ std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
     return out;
 }
 
+ostream& ChannelTemplate::exportInstruments(ostream& os) {
+    for(auto& instr : instruments) {
+        os << "instrument" << std::endl;
+        os << instr;
+    }
+    return os;
+}
+
 //Serializer
 ostream& operator<<(ostream& os, const ChannelTemplate& ct) {
     os << "stride " << ct.stride << std::endl;
@@ -134,6 +143,7 @@ istream& operator>>(istream& is, ChannelTemplate& ct) {
     is >> propName;
     while(propName != "endStruct") {
         switch(constHash(propName.c_str())) {
+            //Used in firmware configs
             case constHash("stride"):
             is >> ct.stride;
             break;
@@ -157,6 +167,13 @@ istream& operator>>(istream& is, ChannelTemplate& ct) {
             break;
             case constHash("noteTickStep"):
             ct.noteTickSteps.emplace_back(deserializeProcessStep(is));
+            break;
+
+            //Used in song loading
+            case constHash("instrument"):
+            ct.instruments.emplace_back(ct.templateInstrument.create());
+            Instrument& inst = ct.instruments.back();
+            is >> inst;
             break;
         }
         if(is.fail()) {

@@ -88,8 +88,31 @@ istream& operator>>(istream& is, TemplateInstrument& ti) {
             cout << "stream marked failed after handling property: " << propName << std::endl;
             return is;
         }
-        is >> propName; 
+        is >> propName;
         
+    }
+    return is;
+}
+
+ostream& operator<<(ostream& os, const Instrument& inst) {
+    os << "\"" << inst.name << "\"" << std::endl;
+    for(auto& envelope : inst.envelopes) {
+        envelope->print(os);
+    }
+    for(auto& param : inst.params) {
+        os << param.value << " ";
+    }
+    os << std::endl;
+    return os;
+}
+
+istream& operator>>(istream& is, Instrument& inst) {
+    getQuotedString(is, inst.name);
+    for(auto& envelope : inst.envelopes) {
+        envelope->scan(is);
+    }
+    for(auto& param : inst.params) {
+        is >> param.value;
     }
     return is;
 }

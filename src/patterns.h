@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <array>
+#include <iostream>
 
 #define MAX_PATTERN_LENGTH 256
 
@@ -20,3 +21,6 @@ class PatternLibrary {
     void addParam();
     vector<int> patternSequence;
 };
+
+ostream& operator<<(ostream& os, const PatternLibrary& patlib);
+istream& operator>>(istream& is, PatternLibrary& patlib);

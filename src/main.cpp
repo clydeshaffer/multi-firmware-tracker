@@ -20,11 +20,13 @@
 #include "imgui/backends/imgui_impl_sdlrenderer2.h"
 #include "imgui/misc/cpp/imgui_stdlib.h"
 
+#include "tinyfd/tinyfiledialogs.h"
+
 #include "audio_coprocessor.h"
 
 #include "channel.h"
 
-#define WINDOW_TITLE "My SDL imgui app"
+#define WINDOW_TITLE "MultiFirmwareTracker for GameTank"
 
 using namespace std;
 
@@ -72,6 +74,10 @@ int keynotes_az[26] = {
 int keynotes_09[10] = {
     27, 255, 13, 15, 255, 18, 20, 22, 255, 25
 };
+
+char const *songFilterPatterns[1] = {"*.mft"};
+char const *configFilterPatterns[1] = {"*.ini"};
+char const *firmwareFilterPatterns[1] = {"*.bin"};
 
 int octave = 4;
 int selectedInstrumentIdx = 0;
@@ -176,6 +182,68 @@ void sequenceRowPopup(int row) {
     }
 }
 
+void open_song(const char* name) {
+    if(name == nullptr) return;
+    std::ifstream songFileIn(name);
+    songFileIn >> mainChannelTemplate;
+
+    std::string sectionName;
+    while(!songFileIn.eof()) {
+        songFileIn >> sectionName;
+        if(songFileIn.eof() || songFileIn.fail()) {
+            break;
+        }
+        if(sectionName == "patterns") {
+            for(auto& channel : channelStates) {
+                songFileIn >> channel.patterns;
+            }
+            songLengthInPatterns = channelStates[0].patterns.patternSequence.size();
+        } else if(sectionName == "speed") {
+            songFileIn >> playingStepTime;
+        } else if(sectionName == "patternLength") {
+            songFileIn >> patternLengthInRows;
+        }
+    }
+    songFileIn.close();
+}
+
+void save_song(const char* name) {
+    if(name == nullptr) return;
+    std::ofstream songFileOut(name);
+    mainChannelTemplate.exportInstruments(songFileOut);
+    songFileOut << "endStruct" << std::endl;
+    songFileOut << "patterns" << std::endl;
+    for(auto& channel : channelStates) {
+        songFileOut << channel.patterns;
+    }
+    songFileOut << "speed " << playingStepTime << std::endl;
+    songFileOut << "patternLength " << patternLengthInRows << std::endl;
+    songFileOut.close();
+}
+
+void save_firmware_config(const char* name) { 
+    if(name == nullptr) return;
+    std::ofstream fout(name);
+    fout << numChannels << std::endl;
+    fout << mainChannelTemplate;
+    fout << std::endl;
+    fout.close();
+}
+
+void load_firmware_config(const char* name) {
+    if(name == nullptr) return;
+    std::ifstream fin(name);
+
+    fin >> numChannels;
+
+    for(int i = 0; i < numChannels; ++i) {
+        channelStates.emplace_back(Channel(mainChannelTemplate));    
+    }
+
+    fin >> mainChannelTemplate;
+    fin.close();
+}
+
 int main(int argC, char* argV[]) {
     SDL_Init(SDL_INIT_VIDEO);
 	atexit(SDL_Quit);
@@ -195,43 +263,26 @@ int main(int argC, char* argV[]) {
     //Event handler
     SDL_Event e; 
 
-    std::ifstream fin("fm_firmware.ini");
+    load_firmware_config("fm_firmware.ini");
 
-    fin >> numChannels;
-
-    for(int i = 0; i < numChannels; ++i) {
-        channelStates.emplace_back(Channel(mainChannelTemplate));    
-    }
-
-    fin >> mainChannelTemplate;
-    fin.close();
-
-    mainChannelTemplate.instruments.emplace_back(mainChannelTemplate.templateInstrument.create());
 
     soundcard = new AudioCoprocessor();
+
+    std:ifstream firmware_bin("fm_firmware.bin", std::ios::binary);
+    firmware_bin.read(reinterpret_cast<char*>(soundcard->singleton_acp_state->ram), AUDIO_RAM_SIZE);
+    firmware_bin.close();
+
     AudioCoprocessor::singleton_acp_state->isEmulationPaused = false;
     soundcard->register_write(ACP_RESET, 1);
     soundcard->register_write(ACP_RATE, 0xFF);
 
-    soundcard->ram_write(0x30, 128);
-    soundcard->ram_write(0x31, 128);
-    soundcard->ram_write(0x32, 128);
-    soundcard->ram_write(0x33, 128);
-    soundcard->ram_write(0x34, 128);
-    soundcard->ram_write(0x35, 128);
-    soundcard->ram_write(0x36, 128);
-    soundcard->ram_write(0x37, 128);
-    soundcard->ram_write(0x38, 128);
-    soundcard->ram_write(0x39, 128);
-    soundcard->ram_write(0x3A, 128);
-    soundcard->ram_write(0x3B, 128);
-    soundcard->ram_write(0x3C, 128);
-    soundcard->ram_write(0x3D, 128);
-    soundcard->ram_write(0x3E, 128);
-    soundcard->ram_write(0x3F, 128);
     uint64_t ticks = SDL_GetTicks64();
 
     std::thread musicPlaybackThread(musicPlaybackWorkerLoop, std::ref(endMusicThread));
+
+    if(argC > 1) {
+        open_song(argV[1]);
+    }
 
     while(!quit) {
         uint64_t lastTicks = ticks;
@@ -353,22 +404,39 @@ int main(int argC, char* argV[]) {
 			ImGuiWindowFlags_NoMove |
 			ImGuiWindowFlags_NoSavedSettings |
 			ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoBringToFrontOnFocus
+            ImGuiWindowFlags_NoBringToFrontOnFocus |
+            ImGuiWindowFlags_MenuBar
         );
 
-        if(ImGui::Button("Exit")) {
-            quit = true;
-        }
+        if(ImGui::BeginMenuBar()) {
+            if(ImGui::BeginMenu("File")) {
+                if(ImGui::MenuItem("New Song(TODO, just reopen the program lol)")) {
+                }
+                if(ImGui::MenuItem("Open Song")) {
+                    open_song(tinyfd_openFileDialog("Select song file", "", 1, songFilterPatterns, "MultiFirmwareTracker songs", 0));
+                }
+                if(ImGui::MenuItem("Save Song")) {
+                    save_song(tinyfd_saveFileDialog("Save song file", "", 1, songFilterPatterns, "MultiFirmwareTracker songs"));
+                }
+                if(ImGui::MenuItem("Exit")) {
+                    quit = true;
+                }
+                ImGui::EndMenu();
+            }
+            if(ImGui::BeginMenu("Config")) {
+                if(ImGui::MenuItem("Save Firmware Config")) {
+                    load_firmware_config(tinyfd_openFileDialog("Select config file", "", 1, configFilterPatterns, "MultiFirmwareTracker configs", 0));
+                }
+                if(ImGui::MenuItem("Load Firmware Config")) {
+                    save_firmware_config(tinyfd_saveFileDialog("Save config file", "", 1, configFilterPatterns, "MultiFirmwareTracker configs"));
+                }
+                if(ImGui::MenuItem("Load Audio Firmware (TODO)")) {
 
-        if(recording) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.3f, 0.3f, 1.0f));
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.7f, 1.0f));
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenuBar();
         }
-        if(ImGui::Button("rec")) {
-            recording = !recording;
-        }
-        ImGui::PopStyleColor();
 
         if(playing) {
             if(ImGui::Button("stop")) {
@@ -381,7 +449,24 @@ int main(int argC, char* argV[]) {
             }
         }
 
-        ImGui::InputInt("Frames per step", &playingStepTime, 1, 10);
+        ImGui::SameLine();
+
+        if(recording) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.3f, 0.3f, 1.0f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.7f, 1.0f));
+        }
+        if(ImGui::Button("rec")) {
+            recording = !recording;
+        }
+        ImGui::PopStyleColor();
+
+
+        ImGui::InputInt("Step Delay", &playingStepTime, 1, 10);
+        if(ImGui::InputInt("Rows", &patternLengthInRows, 1, 1)) {
+            if(patternLengthInRows < 1) patternLengthInRows = 1;
+            if(patternLengthInRows >= 256) patternLengthInRows = 256;
+        }
         ImGui::InputInt("Octave", &octave, 1, 1);
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -530,7 +615,9 @@ int main(int argC, char* argV[]) {
         ImGui::End();
         ImGui::PopStyleVar(2);
 
-        ImGui::Begin("firmware config");
+        ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(512, 32), ImGuiCond_FirstUseEver);
+        ImGui::Begin("firmware config", NULL, ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::TextUnformatted("configure firmware properties here");
         if(ImGui::InputInt("Channels", &numChannels, 1, 1, 0)) {
             if(numChannels < 1) numChannels = 1;
@@ -541,8 +628,9 @@ int main(int argC, char* argV[]) {
         mainChannelTemplate.renderConfigUI();
         ImGui::End();
 
-
-        ImGui::Begin("instrument config");
+        ImGui::SetNextWindowCollapsed(false, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(512, 64), ImGuiCond_FirstUseEver);
+        ImGui::Begin("instrument config", NULL, ImGuiWindowFlags_AlwaysAutoResize);
         if((selectedInstrumentIdx >= 0) && (selectedInstrumentIdx < mainChannelTemplate.instruments.size())) {
             mainChannelTemplate.instruments[selectedInstrumentIdx].renderConfigUI();
         }
@@ -556,11 +644,6 @@ int main(int argC, char* argV[]) {
     if(musicPlaybackThread.joinable()) {
         musicPlaybackThread.join();
     }
-
-    std::ofstream fout("fm_firmware.ini");
-    fout << numChannels << std::endl;
-    fout << mainChannelTemplate;
-    fout << std::endl;
 
     return 0;
 }

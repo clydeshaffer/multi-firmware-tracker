@@ -5,8 +5,6 @@
 
 #include "audio_coprocessor.h"
 
-#include "acp_fm.h"
-
 void AudioCoprocessor::ram_write(uint16_t address, uint8_t value) {
 	state.ram[address & 0xFFF] = value;
 }
@@ -173,8 +171,7 @@ AudioCoprocessor::AudioCoprocessor() {
     state.clkMult = 4;
 
 	for(int i = 0; i < AUDIO_RAM_SIZE; i ++) {
-		//state.ram[i] = rand() % 256;
-		state.ram[i] = acp_fm[i];
+        state.ram[i] = 0xEA;
 	}
 
     //if(!EmulatorConfig::noSound) {

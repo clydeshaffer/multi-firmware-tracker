@@ -45,6 +45,8 @@ class ArrayEnvSource : public TimeSeriesSource {
         void draw_instrument_ui();
         ArrayEnvSource(ArrayEnvSourceSpec* spec);
         TimeSeriesSourceType type();
+        void print(std::ostream& os) const override;
+        void scan(std::istream& is) override;
     private:
         ArrayEnvSourceSpec* parent;
         std::vector<int> envelopeData;
@@ -52,6 +54,8 @@ class ArrayEnvSource : public TimeSeriesSource {
 
 ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tss);
 
+ostream& operator<<(ostream& os, const TimeSeriesSource& tss);
+
 TimeSeriesSourceSpec* deserializeTimeSeriesSourceSpec(std::istream& is);
 
-TimeSeriesSource** deserializeTimeSeriesSource(std::istream& is);
+TimeSeriesSource* deserializeTimeSeriesSource(std::istream& is);

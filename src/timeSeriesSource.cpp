@@ -55,6 +55,23 @@ void ArrayEnvSourceSpec::scan(std::istream& is) {
     getQuotedString(is, name) >> min >> max;
 }
 
+void ArrayEnvSource::print(std::ostream& os) const {
+    os << envelopeData.size();
+    for(auto& envSlice : envelopeData) {
+        os << " " << envSlice;
+    }
+    os << std::endl;
+}
+
+void ArrayEnvSource::scan(std::istream& is) {
+    int arraySize;
+    is >> arraySize;
+    envelopeData.resize(arraySize);
+    for(int i = 0; i < arraySize; ++i) {
+        is >> envelopeData[i];
+    }
+}
+
 ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tsss) {
     tsss.print(os);
     return os;
@@ -73,6 +90,11 @@ TimeSeriesSourceSpec* deserializeTimeSeriesSourceSpec(std::istream& is) {
     return newSourceSpec;
 }
 
-TimeSeriesSource** deserializeTimeSeriesSource(std::istream& is) {
+ostream& operator<<(ostream& os, const TimeSeriesSource& tss) {
+    tss.print(os);
+    return os;
+}
+
+TimeSeriesSource* deserializeTimeSeriesSource(std::istream& is) {
     return nullptr;
 }

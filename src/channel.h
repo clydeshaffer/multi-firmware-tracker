@@ -20,6 +20,7 @@ class ChannelTemplate {
     std::vector<ProcessStep*> noteTickSteps;
 
     void renderConfigUI();
+    ostream& exportInstruments(ostream& os);
 
     friend ostream& operator<<(ostream& os, const ChannelTemplate& ct);
     friend istream& operator>>(istream& is, ChannelTemplate& ct);

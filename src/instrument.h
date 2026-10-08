@@ -26,6 +26,9 @@ class Instrument {
     std::vector<TimeSeriesSource*> envelopes;
     std::vector<NamedInstrumentParam> params;
     void renderConfigUI();
+
+    friend ostream& operator<<(ostream& os, const Instrument& inst);
+    friend istream& operator>>(istream& is, Instrument& inst);
 };
 
 class TemplateInstrument {
@@ -42,3 +45,6 @@ class TemplateInstrument {
 
 ostream& operator<<(ostream& os, const TemplateInstrument& ti);
 istream& operator>>(istream& is, TemplateInstrument& ti);
+
+ostream& operator<<(ostream& os, const Instrument& inst);
+istream& operator>>(istream& is, Instrument& inst);
