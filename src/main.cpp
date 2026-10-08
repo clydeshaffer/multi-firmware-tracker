@@ -534,6 +534,9 @@ int main(int argC, char* argV[]) {
         ImGui::TextUnformatted("configure firmware properties here");
         if(ImGui::InputInt("Channels", &numChannels, 1, 1, 0)) {
             if(numChannels < 1) numChannels = 1;
+            if(numChannels >= channelStates.size()) {
+                channelStates.emplace_back(Channel(mainChannelTemplate)); 
+            }
         }
         mainChannelTemplate.renderConfigUI();
         ImGui::End();

@@ -133,7 +133,6 @@ istream& operator>>(istream& is, ChannelTemplate& ct) {
     std::string propName;
     is >> propName;
     while(propName != "endStruct") {
-        cout << propName << std::endl;
         switch(constHash(propName.c_str())) {
             case constHash("stride"):
             is >> ct.stride;

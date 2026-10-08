@@ -69,9 +69,7 @@ ostream& operator<<(ostream& os, const TemplateInstrument& ti) {
 istream& operator>>(istream& is, TemplateInstrument& ti) {
     std::string propName;
     is >> propName;
-    cout << "Deserializing TemplateInstrument" << std::endl;
     while(propName != "endStruct") {
-        cout << propName << std::endl;
         switch(constHash(propName.c_str())) {
             case constHash("name"):
             getQuotedString(is, ti.name);
@@ -80,7 +78,6 @@ istream& operator>>(istream& is, TemplateInstrument& ti) {
             ti.envelopes.emplace_back(deserializeTimeSeriesSourceSpec(is));
             break;
             case constHash("param"):
-            cout << "Deserializing param" << std::endl;
             ti.params.emplace_back();
             getQuotedString(is, ti.params.back().name);
             is >> ti.params.back().min >> ti.params.back().max;
