@@ -296,15 +296,16 @@ int main(int argC, char* argV[]) {
             {
                 quit = true;
             }
-            if(e.type == SDL_KEYDOWN) {
-                if(recording) {
-                    int noteNum = 255;
-                    if((e.key.keysym.sym >= SDLK_a) && (e.key.keysym.sym <= SDLK_z)) {
-                        noteNum = keynotes_az[e.key.keysym.sym - SDLK_a];
-                    } else if((e.key.keysym.sym >= SDLK_0) && (e.key.keysym.sym <= SDLK_9)) {
-                        noteNum = keynotes_09[e.key.keysym.sym - SDLK_0];
-                    } else {
-                        vector<int> p;
+            if((e.type == SDL_KEYDOWN) && !ImGui::IsAnyItemFocused()) {
+
+                int noteNum = 255;
+                if((e.key.keysym.sym >= SDLK_a) && (e.key.keysym.sym <= SDLK_z)) {
+                    noteNum = keynotes_az[e.key.keysym.sym - SDLK_a];
+                } else if((e.key.keysym.sym >= SDLK_0) && (e.key.keysym.sym <= SDLK_9)) {
+                    noteNum = keynotes_09[e.key.keysym.sym - SDLK_0];
+                } else {
+                    vector<int> p;
+                    if(recording) {
                         switch(e.key.keysym.sym) {
                             case SDLK_DELETE:
                             p.resize(mainChannelTemplate.eventParams.size());
@@ -326,8 +327,10 @@ int main(int argC, char* argV[]) {
                             break;
                         }
                     }
-                    if(noteNum != 255) {
-                        noteNum += (octave+1)*12;
+                }
+                if(noteNum != 255) {
+                    noteNum += (octave+1)*12;
+                    if(recording) {
                         vector<int> p;
                         p.resize(mainChannelTemplate.eventParams.size());
                         p[0] = noteNum;
@@ -336,9 +339,11 @@ int main(int argC, char* argV[]) {
                         if(!playing) {
                             ++selectedPatRowIdx;
                         }
-                        playNote(selectedPatColIdx, noteNum, selectedInstrumentIdx);
                     }
+                    playNote(selectedPatColIdx, noteNum, selectedInstrumentIdx);
                 }
+
+
                 switch (e.key.keysym.sym) {
                     case SDLK_DOWN:
                     ++selectedPatRowIdx;
