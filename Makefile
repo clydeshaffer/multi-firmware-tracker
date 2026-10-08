@@ -30,8 +30,8 @@ NATIVE_SRCS = src/tinyfd/tinyfiledialogs.c src/whereami/whereami.c
 NATIVE_OBJS = $(NATIVE_SRCS:%=$(OUT_DIR)/%.o)
 
 #BIN_NAME specifies the name of our exectuable
-BIN_NAME = MyApp
-ZIP_NAME = GTE_$(OS).zip
+BIN_NAME = mftracker
+ZIP_NAME = MFT_$(OS).zip
 
 EXTRA_INCLUDES = -Isrc/imgui -Isrc/imgui/backends -Isrc/imgui/ext/implot -Isrc/whereami
 
