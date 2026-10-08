@@ -1,5 +1,6 @@
 #include "timeSeriesSource.h"
 #include "imgui.h"
+#include "imgui/misc/cpp/imgui_stdlib.h"
 
 TimeSeriesSource* ArrayEnvSourceSpec::create() {
     return new ArrayEnvSource(this);
@@ -22,7 +23,7 @@ int ArrayEnvSource::evaluate(int initial, int t) {
 }
 
 void ArrayEnvSource::draw_instrument_ui() {
-    ImGui::TextUnformatted(parent->name);
+    ImGui::TextUnformatted(parent->name.c_str());
     for(int i = 0; i < envelopeData.size(); ++i) {
         ImGui::PushID(i);
         if(i > 0) ImGui::SameLine();
@@ -34,7 +35,7 @@ void ArrayEnvSource::draw_instrument_ui() {
 void ArrayEnvSourceSpec::draw_setup_ui() {
     ImGui::TextUnformatted("Name:");
     ImGui::SameLine();
-    ImGui::InputText("##Name", name, 64);
+    ImGui::InputText("##Name", &name);
     ImGui::TextUnformatted("Range");
     ImGui::SameLine();
     ImGui::InputInt("##Min", &min);
@@ -44,4 +45,34 @@ void ArrayEnvSourceSpec::draw_setup_ui() {
 
 TimeSeriesSourceType ArrayEnvSource::type() {
     return TimeSeriesSourceType::ARRAY;
+}
+
+void ArrayEnvSourceSpec::print(std::ostream& os) const {
+    os << "ARRAY \"" << name << "\" " << min << " " << max << std::endl; 
+}
+
+void ArrayEnvSourceSpec::scan(std::istream& is) {
+    getQuotedString(is, name) >> min >> max;
+}
+
+ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tsss) {
+    tsss.print(os);
+    return os;
+}
+
+TimeSeriesSourceSpec* deserializeTimeSeriesSourceSpec(std::istream& is) {
+    std::string typeName;
+    is >> typeName;
+    TimeSeriesSourceSpec* newSourceSpec = nullptr;
+    if(typeName == "ARRAY") {
+        newSourceSpec = new ArrayEnvSourceSpec();
+    }
+    if(newSourceSpec != nullptr) {
+        newSourceSpec->scan(is);
+    }
+    return newSourceSpec;
+}
+
+TimeSeriesSource** deserializeTimeSeriesSource(std::istream& is) {
+    return nullptr;
 }

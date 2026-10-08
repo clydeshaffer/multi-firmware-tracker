@@ -1,5 +1,6 @@
 #include "channel.h"
 #include "imgui.h"
+#include "hash.h"
 
 void ChannelTemplate::renderConfigUI() {
     int i = 0;
@@ -52,7 +53,7 @@ void ChannelTemplate::renderConfigUI() {
         ImGui::TextUnformatted("Note Tick Processing");
         ImGui::Separator();
         i = 0;
-        for(auto& step : noteSustainSteps) {
+        for(auto& step : noteTickSteps) {
             ImGui::PushID(i++);
             step->draw_ui(pctx);
             ImGui::PopID();
@@ -92,7 +93,7 @@ std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
     }
 
     ProcessingState ps(framesSinceNote, lastEventParams, base.instruments[lastInstrumentIndex]);
-    for(auto& step : base.noteSustainSteps) {
+    for(auto& step : base.noteTickSteps) {
         step->exec(&ps);
     }
     
@@ -105,4 +106,65 @@ std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
     }
     ++framesSinceNote;
     return out;
+}
+
+//Serializer
+ostream& operator<<(ostream& os, const ChannelTemplate& ct) {
+    os << "stride " << ct.stride << std::endl;
+    os << "templateInstrument " << ct.templateInstrument << std::endl;
+    for(auto& eventParam : ct.eventParams) {
+        os << "eventParam " << eventParam << std::endl;
+    }
+    for(auto& output : ct.outputs) {
+        os << "output " << output << std::endl;
+    }
+    for(auto& noteHitStep : ct.noteHitSteps) {
+        os << "noteHitStep " << (*noteHitStep) << std::endl;
+    }
+    for(auto& noteTickStep : ct.noteTickSteps) {
+        os << "noteTickStep " << (*noteTickStep) << std::endl;
+    }
+    os << "endStruct" << std::endl;
+    return os;
+}
+
+//Deserializer
+istream& operator>>(istream& is, ChannelTemplate& ct) {
+    std::string propName;
+    is >> propName;
+    while(propName != "endStruct") {
+        cout << propName << std::endl;
+        switch(constHash(propName.c_str())) {
+            case constHash("stride"):
+            is >> ct.stride;
+            break;
+            case constHash("templateInstrument"):
+            is >> ct.templateInstrument;
+            break;
+            case constHash("eventParam"):
+            ct.eventParams.emplace_back();
+            if(!(is >> ct.eventParams.back())) {
+                ct.eventParams.pop_back();
+            }
+            break;
+            case constHash("output"):
+            ct.outputs.emplace_back();
+            if(!(is >> ct.outputs.back())) {
+                ct.outputs.pop_back();
+            }
+            break;
+            case constHash("noteHitStep"):
+            ct.noteHitSteps.emplace_back(deserializeProcessStep(is));
+            break;
+            case constHash("noteTickStep"):
+            ct.noteTickSteps.emplace_back(deserializeProcessStep(is));
+            break;
+        }
+        if(is.fail()) {
+            cout << "stream marked failed after handling property: " << propName << std::endl;
+            return is;
+        }
+        is >> propName;
+    }
+    return is;
 }

@@ -3,11 +3,13 @@
 #include "timeSeriesSource.h"
 #include <string>
 #include <vector>
+#include <iostream>
 
+using namespace std;
 
 class NamedInstrumentParamTemplate {
     public:
-    char name[32];
+    std::string name;
     int min;
     int max;
 };
@@ -33,4 +35,10 @@ class TemplateInstrument {
     std::vector<NamedInstrumentParamTemplate> params;
     void renderConfigUI();
     Instrument create();
+
+    friend ostream& operator<<(ostream& os, const TemplateInstrument& ti);
+    friend istream& operator>>(istream& is, TemplateInstrument& ti);
 };
+
+ostream& operator<<(ostream& os, const TemplateInstrument& ti);
+istream& operator>>(istream& is, TemplateInstrument& ti);

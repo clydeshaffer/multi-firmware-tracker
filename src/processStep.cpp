@@ -1,5 +1,6 @@
 #include "processStep.h"
 #include "imgui.h"
+#include "hash.h"
 
 
 #define PITCH_TABLE_LENGTH 216
@@ -13,6 +14,56 @@ static uint8_t pitch_table[PITCH_TABLE_LENGTH] = {
     0x13, 0x29, 0x14, 0x4D, 0x15, 0x82, 0x16, 0xC9, 0x18, 0x24, 0x19, 0x93, 0x1B, 0x19, 0x1C, 0xB5, 0x1E, 0x6A, 0x20, 0x39, 0x22, 0x24, 0x24, 0x2B,
     0x26, 0x52, 0x28, 0x99, 0x2B, 0x03, 0x2D, 0x92, 0x30, 0x48, 0x33, 0x27, 0x36, 0x31, 0x39, 0x6A, 0x3C, 0xD4, 0x40, 0x72, 0x44, 0x47, 0x48, 0x57,
     0x4C, 0xA4, 0x51, 0x32, 0x56, 0x06, 0x5B, 0x24, 0x60, 0x8F, 0x66, 0x4D, 0x6C, 0x62, 0x72, 0xD4, 0x79, 0xA8, 0x80, 0xE4, 0x88, 0x8E, 0x90, 0xAD};
+
+ostream& operator<<(ostream& os, const ProcessStep& ps) {
+    ps.print(os);
+    return os;
+}
+
+ProcessStep* deserializeProcessStep(istream& is) {
+    std::string stepType;
+    ProcessStep* step = nullptr;
+    is >> stepType;
+    switch(constHash(stepType.c_str())) {
+        case constHash("GetN"):
+        step = new ProcessGetN();
+        break;
+        case constHash("GetT"):
+        step = new ProcessGetT();
+        break;
+        case constHash("GetParam"):
+        step = new ProcessGetParam();
+        break;
+        case constHash("AddN"):
+        step = new ProcessAddN();
+        break;
+        case constHash("Remap"):
+        step = new ProcessRemap();
+        break;
+        case constHash("Clamp"):
+        step = new ProcessClamp();
+        break;
+        case constHash("FetchEnvelope"):
+        step = new ProcessFetchEnvelope();
+        break;
+        case constHash("FetchInstrumentParam"):
+        step = new ProcessFetchInstrumentParam();
+        break;
+        case constHash("AddInstrumentParam"):
+        step = new ProcessAddInstrumentParam();
+        break;
+        case constHash("SendMemWrite"):
+        step = new ProcessSendMemWrite();
+        break;
+        case constHash("LookupPitch"):
+        step = new ProcessLookupPitch();
+        break;
+    }
+    if(step != nullptr) {
+        step->scan(is);
+    }
+    return step;
+}
 
 void ProcessGetN::exec(ProcessingState* st) {
     st->acc = n;
@@ -138,10 +189,10 @@ void ProcessClamp::draw_ui(ProcessStepDrawContext& ctx) {
 void ProcessFetchEnvelope::draw_ui(ProcessStepDrawContext& ctx) {
     ImGui::TextUnformatted("Resolve envelope value of");
     ImGui::SameLine();
-    if(ImGui::BeginCombo("##Instrument Envelope", ctx.templateInstrument.envelopes[envIndex]->name)) {
+    if(ImGui::BeginCombo("##Instrument Envelope", ctx.templateInstrument.envelopes[envIndex]->name.c_str())) {
         int i = 0;
         for(const auto& instrumentEnv : ctx.templateInstrument.envelopes) {
-            if(ImGui::Selectable(instrumentEnv->name, envIndex == i)) {
+            if(ImGui::Selectable(instrumentEnv->name.c_str(), envIndex == i)) {
                 envIndex = i;
             }
             if(envIndex == i) {
@@ -156,10 +207,10 @@ void ProcessFetchEnvelope::draw_ui(ProcessStepDrawContext& ctx) {
 void ProcessFetchInstrumentParam::draw_ui(ProcessStepDrawContext& ctx) {
     ImGui::TextUnformatted("Get instrument param");
     ImGui::SameLine();
-    if(ImGui::BeginCombo("##Instrument Param", ctx.templateInstrument.params[paramIndex].name)) {
+    if(ImGui::BeginCombo("##Instrument Param", ctx.templateInstrument.params[paramIndex].name.c_str())) {
         int i = 0;
         for(const auto& instrumentParam : ctx.templateInstrument.params) {
-            if(ImGui::Selectable(instrumentParam.name, paramIndex == i)) {
+            if(ImGui::Selectable(instrumentParam.name.c_str(), paramIndex == i)) {
                 paramIndex = i;
             }
             if(paramIndex == i) {
@@ -174,10 +225,10 @@ void ProcessFetchInstrumentParam::draw_ui(ProcessStepDrawContext& ctx) {
 void ProcessAddInstrumentParam::draw_ui(ProcessStepDrawContext& ctx) {
     ImGui::TextUnformatted("Add instrument param");
     ImGui::SameLine();
-    if(ImGui::BeginCombo("##Instrument Param", ctx.templateInstrument.params[paramIndex].name)) {
+    if(ImGui::BeginCombo("##Instrument Param", ctx.templateInstrument.params[paramIndex].name.c_str())) {
         int i = 0;
         for(const auto& instrumentParam : ctx.templateInstrument.params) {
-            if(ImGui::Selectable(instrumentParam.name, paramIndex == i)) {
+            if(ImGui::Selectable(instrumentParam.name.c_str(), paramIndex == i)) {
                 paramIndex = i;
             }
             if(paramIndex == i) {
@@ -213,3 +264,92 @@ void ProcessSendMemWrite::draw_ui(ProcessStepDrawContext& ctx) {
 void ProcessLookupPitch::draw_ui(ProcessStepDrawContext &ctx) {
     ImGui::TextUnformatted("Use Acc to look up pitch value. (TODO: editable lookup table)");
 }
+
+void ProcessGetN::print(std::ostream& os) const {
+    os << "GetN " << n << std::endl;
+}
+
+void ProcessGetT::print(std::ostream& os) const {
+    os << "GetT" << std::endl;
+}
+
+void ProcessGetParam::print(std::ostream& os) const {
+    os << "GetParam " << paramIndex << std::endl;
+}
+
+void ProcessAddN::print(std::ostream& os) const {
+    os << "AddN " << increment << std::endl;
+}
+
+void ProcessRemap::print(std::ostream& os) const {
+    os << "Remap " << a << " " << b << " " << x << " " << y << std::endl;
+}
+
+void ProcessClamp::print(std::ostream& os) const {
+    os << "Clamp " << lower << " " << upper << std::endl;
+}
+
+void ProcessFetchEnvelope::print(std::ostream& os) const {
+    os << "FetchEnvelope " << envIndex << std::endl;
+}
+
+void ProcessFetchInstrumentParam::print(std::ostream& os) const {
+    os << "FetchInstrumentParam " << paramIndex << std::endl;
+}
+
+void ProcessAddInstrumentParam::print(std::ostream& os) const {
+    os << "AddInstrumentParam " << paramIndex << std::endl;
+}
+
+void ProcessSendMemWrite::print(std::ostream& os) const {
+    os << "SendMemWrite " << paramIndex << " " << highByte << std::endl;
+}
+
+void ProcessLookupPitch::print(std::ostream& os) const {
+    os << "LookupPitch" << std::endl;
+}
+
+void ProcessGetN::scan(std::istream& is) {
+    is >> n;
+}
+
+void ProcessGetT::scan(std::istream& is) {
+    //Nothing to do
+}
+
+void ProcessGetParam::scan(std::istream& is) {
+    is >> paramIndex;
+}
+
+void ProcessAddN::scan(std::istream& is) {
+    is >> increment;
+}
+
+void ProcessRemap::scan(std::istream& is) {
+    is >> a >> b >> x >> y;
+}
+
+void ProcessClamp::scan(std::istream& is) {
+    is >> lower >> upper;
+}
+
+void ProcessFetchEnvelope::scan(std::istream& is) {
+    is >> envIndex;
+}
+
+void ProcessFetchInstrumentParam::scan(std::istream& is) {
+    is >> paramIndex;
+}
+
+void ProcessAddInstrumentParam::scan(std::istream& is) {
+    is >> paramIndex;
+}
+
+void ProcessSendMemWrite::scan(std::istream& is) {
+    is >> paramIndex >> highByte;
+}
+
+void ProcessLookupPitch::scan(std::istream& is) {
+    //Nothing to do
+}
+

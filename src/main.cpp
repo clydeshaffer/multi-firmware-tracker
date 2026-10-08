@@ -80,10 +80,6 @@ const char* noteNames[] = {
     "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-", "--"
 };
 
-#define MAX_ENVELOPE_LENGTH 256
-vector<uint8_t> envelopeLengths;
-vector<std::array<uint8_t, MAX_ENVELOPE_LENGTH>> envelopes;
-
 void runWriteList(vector<MemWrite> writes) {
     for(auto& mw : writes) {
         soundcard->ram_write(mw.address, mw.value);
@@ -199,118 +195,18 @@ int main(int argC, char* argV[]) {
     //Event handler
     SDL_Event e; 
 
-    //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
-    //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
-    //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
-    //envelopes.emplace_back(std::array<uint8_t,MAX_ENVELOPE_LENGTH>());
+    std::ifstream fin("fm_firmware.ini");
 
-    channelStates.emplace_back(Channel(mainChannelTemplate));
-    channelStates.emplace_back(Channel(mainChannelTemplate));
-    channelStates.emplace_back(Channel(mainChannelTemplate));
-    channelStates.emplace_back(Channel(mainChannelTemplate));
+    fin >> numChannels;
 
-    mainChannelTemplate.templateInstrument.name = "FM Instrument";
-    ArrayEnvSourceSpec templateArrayEnv[4];
-    NamedInstrumentParamTemplate niptOpNoteAdj[4];
-    for(int i = 0; i < 4; ++i) {
-        templateArrayEnv[i].min = 0;
-        templateArrayEnv[i].max = 16;
-        sprintf(templateArrayEnv[i].name, "Operator %d Volume", i);
-        mainChannelTemplate.templateInstrument.envelopes.emplace_back(&templateArrayEnv[i]);
-
-        
-        sprintf(niptOpNoteAdj[i].name, "Op %d Note Offset", i);
-        niptOpNoteAdj[i].min = -128;
-        niptOpNoteAdj[i].max = 128;
-        mainChannelTemplate.templateInstrument.params.emplace_back(niptOpNoteAdj[i]);
+    for(int i = 0; i < numChannels; ++i) {
+        channelStates.emplace_back(Channel(mainChannelTemplate));    
     }
+
+    fin >> mainChannelTemplate;
+    fin.close();
 
     mainChannelTemplate.instruments.emplace_back(mainChannelTemplate.templateInstrument.create());
-
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op1 Pitch MSB", 0x10));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op2 Pitch MSB", 0x11));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op3 Pitch MSB", 0x12));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op4 Pitch MSB", 0x13));
-
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op1 Pitch LSB", 0x20));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op2 Pitch LSB", 0x21));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op3 Pitch LSB", 0x22));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op4 Pitch LSB", 0x23));
-
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op1 Amplitude", 0x30));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op2 Amplitude", 0x31));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op3 Amplitude", 0x32));
-    mainChannelTemplate.outputs.emplace_back(NamedOffset("Op4 Amplitude", 0x33));
-
-    mainChannelTemplate.eventParams.emplace_back(EventParam("Note", 1, 3));
-    mainChannelTemplate.eventParams.emplace_back(EventParam("Instrument", 1, 2));
-
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(0));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(0, true));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(4, false));
-
-    
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(1));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(1, true));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(5, false));
-    
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(2));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(2, true));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(6, false));
-    
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessGetParam(0));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessAddInstrumentParam(3));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessLookupPitch());
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(3, true));
-    mainChannelTemplate.noteHitSteps.emplace_back(new ProcessSendMemWrite(7, false));
-
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(8, false));
-
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(1));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(9, false));
-
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(2));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(10, false));
-
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessGetN(0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessFetchEnvelope(3));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessRemap(0, 16, 128, 0));
-    mainChannelTemplate.noteSustainSteps.emplace_back(new ProcessSendMemWrite(11, false));
-
-    envelopes.resize(4);
-    envelopeLengths.resize(4);
-
-
-    envelopes[0].fill(128);
-    envelopes[1].fill(128);
-    envelopes[2].fill(128);
-    envelopes[3].fill(128);
-    envelopeLengths[0] = 1;
-    envelopeLengths[1] = 4;
-    envelopeLengths[2] = 16;
-    envelopeLengths[3] = 16;
-
-    for(int i = 0; i < 15; ++i) {
-        envelopes[1][i] = i * 32;
-        envelopes[2][i] = i * 8;
-        envelopes[3][i] = i * 8;
-    }
-    envelopes[1][3] = 128;
-    envelopes[2][15] = 128;
-    envelopes[3][15] = 128;
 
     soundcard = new AudioCoprocessor();
     AudioCoprocessor::singleton_acp_state->isEmulationPaused = false;
@@ -657,5 +553,11 @@ int main(int argC, char* argV[]) {
     if(musicPlaybackThread.joinable()) {
         musicPlaybackThread.join();
     }
+
+    std::ofstream fout("fm_firmware.ini");
+    fout << numChannels << std::endl;
+    fout << mainChannelTemplate;
+    fout << std::endl;
+
     return 0;
 }

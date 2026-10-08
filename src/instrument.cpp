@@ -1,6 +1,8 @@
 #include "instrument.h"
 #include "imgui.h"
 #include "imgui/misc/cpp/imgui_stdlib.h"
+#include "hash.h"
+#include "serializationUtil.h"
 
 Instrument TemplateInstrument::create() {
     Instrument instr;
@@ -26,7 +28,7 @@ void TemplateInstrument::renderConfigUI() {
     }
     for(auto& param : params) {
         ImGui::PushID(i++);
-        ImGui::InputText("Name", param.name, 32);
+        ImGui::InputText("Name", &param.name);
         ImGui::SameLine();
         ImGui::InputInt("Min", &param.min);
         ImGui::SameLine();
@@ -45,9 +47,52 @@ void Instrument::renderConfigUI() {
         }
         for(auto& param : params) {
             ImGui::PushID(i++);
-            ImGui::TextUnformatted(param.parent->name);
+            ImGui::TextUnformatted(param.parent->name.c_str());
             ImGui::SameLine();
             ImGui::InputInt("Value", &param.value, 1, 1);
             ImGui::PopID();
         }
+}
+
+ostream& operator<<(ostream& os, const TemplateInstrument& ti) {
+    os << "name \"" << ti.name << "\"" << std::endl;
+    for(auto& envelope : ti.envelopes) {
+        os << "envelope " << (*envelope) << "\n";
+    }
+    for(auto& param : ti.params) {
+        os << "param \"" << param.name << "\" " << param.min << " " << param.max << std::endl;
+    }
+    os << "endStruct" << std::endl;
+    return os;
+}
+
+istream& operator>>(istream& is, TemplateInstrument& ti) {
+    std::string propName;
+    is >> propName;
+    cout << "Deserializing TemplateInstrument" << std::endl;
+    while(propName != "endStruct") {
+        cout << propName << std::endl;
+        switch(constHash(propName.c_str())) {
+            case constHash("name"):
+            getQuotedString(is, ti.name);
+            break;
+            case constHash("envelope"):
+            ti.envelopes.emplace_back(deserializeTimeSeriesSourceSpec(is));
+            break;
+            case constHash("param"):
+            cout << "Deserializing param" << std::endl;
+            ti.params.emplace_back();
+            getQuotedString(is, ti.params.back().name);
+            is >> ti.params.back().min >> ti.params.back().max;
+            break;
+        }
+
+        if(is.fail()) {
+            cout << "stream marked failed after handling property: " << propName << std::endl;
+            return is;
+        }
+        is >> propName; 
+        
+    }
+    return is;
 }

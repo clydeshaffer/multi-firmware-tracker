@@ -2,6 +2,10 @@
 
 #include <cstdint>
 #include <vector>
+#include <iostream>
+#include "serializationUtil.h"
+
+using namespace std;
 
 enum TimeSeriesSourceType {
     ARRAY
@@ -12,20 +16,26 @@ class TimeSeriesSource {
     virtual int evaluate(int initial, int t) = 0;
     virtual void draw_instrument_ui() = 0;
     virtual TimeSeriesSourceType type() = 0;
+    virtual void print(std::ostream& os) const {}
+    virtual void scan(std::istream& is) {}
 };
 
 class TimeSeriesSourceSpec {
     public:
     virtual void draw_setup_ui() = 0;
     virtual TimeSeriesSource* create() = 0;
-    char name[64];
+    std::string name;
+    virtual void print(std::ostream& os) const {}
+    virtual void scan(std::istream& is) {}
 };
 
 class ArrayEnvSourceSpec : public TimeSeriesSourceSpec {
     public:
         void draw_setup_ui();
         TimeSeriesSource* create();
-    public:
+        void print(std::ostream& os) const override;
+        void scan(std::istream& is) override;
+
         int min, max;
 };
 
@@ -39,3 +49,9 @@ class ArrayEnvSource : public TimeSeriesSource {
         ArrayEnvSourceSpec* parent;
         std::vector<int> envelopeData;
 };
+
+ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tss);
+
+TimeSeriesSourceSpec* deserializeTimeSeriesSourceSpec(std::istream& is);
+
+TimeSeriesSource** deserializeTimeSeriesSource(std::istream& is);

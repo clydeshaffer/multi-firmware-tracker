@@ -7,18 +7,22 @@
 #include "memWrite.h"
 #include "eventParam.h"
 #include "patterns.h"
+#include <iostream>
 
 class ChannelTemplate {
     public:
+    int stride = 4;
     TemplateInstrument templateInstrument;
     std::vector<Instrument> instruments;
-    int stride = 4;
     std::vector<EventParam> eventParams;
     std::vector<NamedOffset> outputs;
     std::vector<ProcessStep*> noteHitSteps;
-    std::vector<ProcessStep*> noteSustainSteps;
+    std::vector<ProcessStep*> noteTickSteps;
 
     void renderConfigUI();
+
+    friend ostream& operator<<(ostream& os, const ChannelTemplate& ct);
+    friend istream& operator>>(istream& is, ChannelTemplate& ct);
 };
 
 class Channel {
