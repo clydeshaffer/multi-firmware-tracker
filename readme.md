@@ -34,7 +34,3 @@ Enter starts playing the song from the top of the current pattern
 ## Other controls:
 
 You can right click in the the little top left window thing to duplicate, delete, or add pattern frames.
-
-Want to clear and start a new song? Close it and reopen it, I'm too tired to chase down memory leak city right now and properly clear all the pointers.
-
-While we're at it don't use Open Song if you already opened a song or added anything, right now Open Song acts weirdly *additive* at least so far as instruments are concerned..

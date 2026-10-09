@@ -2,8 +2,8 @@
 #include "imgui.h"
 #include "imgui/misc/cpp/imgui_stdlib.h"
 
-TimeSeriesSource* ArrayEnvSourceSpec::create() {
-    return new ArrayEnvSource(this);
+unique_ptr<TimeSeriesSource> ArrayEnvSourceSpec::create() {
+    return make_unique<ArrayEnvSource>(this);
 }
 
 ArrayEnvSource::ArrayEnvSource(ArrayEnvSourceSpec* spec) : parent(spec) {
@@ -77,12 +77,12 @@ ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tsss) {
     return os;
 }
 
-TimeSeriesSourceSpec* deserializeTimeSeriesSourceSpec(std::istream& is) {
+unique_ptr<TimeSeriesSourceSpec> deserializeTimeSeriesSourceSpec(std::istream& is) {
     std::string typeName;
     is >> typeName;
-    TimeSeriesSourceSpec* newSourceSpec = nullptr;
+    unique_ptr<TimeSeriesSourceSpec> newSourceSpec = nullptr;
     if(typeName == "ARRAY") {
-        newSourceSpec = new ArrayEnvSourceSpec();
+        newSourceSpec = make_unique<ArrayEnvSourceSpec>();
     }
     if(newSourceSpec != nullptr) {
         newSourceSpec->scan(is);
@@ -95,6 +95,3 @@ ostream& operator<<(ostream& os, const TimeSeriesSource& tss) {
     return os;
 }
 
-TimeSeriesSource* deserializeTimeSeriesSource(std::istream& is) {
-    return nullptr;
-}

@@ -19,6 +19,7 @@ class PatternLibrary {
     void writeEvent(vector<int> params, int patternIdx, int row);
     void addPattern();
     void addParam();
+    void clear(int paramCount);
     vector<int> patternSequence;
 };
 

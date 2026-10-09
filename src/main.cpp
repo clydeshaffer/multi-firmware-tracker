@@ -49,11 +49,13 @@ int selectedPatColIdx = 0;
 int numChannels = 4;
 int songLengthInPatterns = 1;
 
-int patternLengthInRows = 32;
+#define DEFAULT_PATTERN_LENGTH 32
+#define DEFAULT_SONG_SPEED 15
+int patternLengthInRows = DEFAULT_PATTERN_LENGTH;
 bool recording = false;
 bool playing = false;
 int playingStepTimer = 0;
-int playingStepTime = 15;
+int playingStepTime = DEFAULT_SONG_SPEED;
 
 #define PITCH_TABLE_LENGTH 216
 uint8_t pitch_table[PITCH_TABLE_LENGTH] = {
@@ -415,9 +417,27 @@ int main(int argC, char* argV[]) {
 
         if(ImGui::BeginMenuBar()) {
             if(ImGui::BeginMenu("File")) {
-                if(ImGui::MenuItem("New Song(TODO, just reopen the program lol)")) {
+                if(ImGui::MenuItem("New Song")) {
+			selectedSeqRowIdx = 0;
+			selectedSeqColIdx = 0;
+			selectedPatRowIdx = 0;
+			selectedPatColIdx = 0;
+			for(auto& channel : channelStates) {
+				channel.patterns.clear(mainChannelTemplate.eventParams.size());
+			}
+			mainChannelTemplate.instruments.resize(0);
+			songLengthInPatterns = 1;
+			patternLengthInRows = DEFAULT_PATTERN_LENGTH;
                 }
                 if(ImGui::MenuItem("Open Song")) {
+		    selectedSeqRowIdx = 0;
+		    selectedSeqColIdx = 0;
+		    selectedPatRowIdx = 0;
+		    selectedPatColIdx = 0;
+		    for(auto& channel : channelStates) {
+    				channel.patterns.clear(mainChannelTemplate.eventParams.size());
+		     }
+                    mainChannelTemplate.instruments.resize(0);		    
                     open_song(tinyfd_openFileDialog("Select song file", "", 1, songFilterPatterns, "MultiFirmwareTracker songs", 0));
                 }
                 if(ImGui::MenuItem("Save Song")) {
@@ -561,9 +581,9 @@ int main(int argC, char* argV[]) {
                 ImGui::PushID(tableRowIdx);
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                char label[16];
-                char cellLabel[64];
-                char patfmt[8];
+                char label[16] = {};
+                char cellLabel[64] = {};
+                char patfmt[8] = {};
                 int paramCnt = mainChannelTemplate.eventParams.size();
                 size_t cellLabelOffset = 0;
                 sprintf(label, "%02x", tableRowIdx);
@@ -603,6 +623,7 @@ int main(int argC, char* argV[]) {
                             cellLabelOffset += sprintf(&cellLabel[cellLabelOffset], patfmt, te[paramIdx]);
                         }
                     }
+		    cellLabel[cellLabelOffset] = 0;
                     if(ImGui::Selectable(cellLabel,  (tableRowIdx == selectedPatRowIdx) && (tableColIdx == selectedPatColIdx), 0)) {
                         selectedPatRowIdx = tableRowIdx;
                         selectedPatColIdx = tableColIdx;

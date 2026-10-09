@@ -38,6 +38,16 @@ void PatternLibrary::addParam() {
     }
 }
 
+void PatternLibrary::clear(int paramCount) {
+	patternSequence.resize(1);
+	patternSequence[0] = 0;
+	paramPatterns.resize(paramCount);
+	for(auto& paramTable : paramPatterns) {
+		paramTable.resize(1);
+		paramTable.front().fill(255);
+	}
+}
+
 ostream& operator<<(ostream& os, const PatternLibrary& patlib) {
     os << patlib.paramPatterns.size() << std::endl;
     for(auto& patternsForParam : patlib.paramPatterns) {

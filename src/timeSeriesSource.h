@@ -4,6 +4,7 @@
 #include <vector>
 #include <iostream>
 #include "serializationUtil.h"
+#include <memory>
 
 using namespace std;
 
@@ -23,7 +24,7 @@ class TimeSeriesSource {
 class TimeSeriesSourceSpec {
     public:
     virtual void draw_setup_ui() = 0;
-    virtual TimeSeriesSource* create() = 0;
+    virtual unique_ptr<TimeSeriesSource> create() = 0;
     std::string name;
     virtual void print(std::ostream& os) const {}
     virtual void scan(std::istream& is) {}
@@ -32,7 +33,7 @@ class TimeSeriesSourceSpec {
 class ArrayEnvSourceSpec : public TimeSeriesSourceSpec {
     public:
         void draw_setup_ui();
-        TimeSeriesSource* create();
+        unique_ptr<TimeSeriesSource> create();
         void print(std::ostream& os) const override;
         void scan(std::istream& is) override;
 
@@ -56,6 +57,5 @@ ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tss);
 
 ostream& operator<<(ostream& os, const TimeSeriesSource& tss);
 
-TimeSeriesSourceSpec* deserializeTimeSeriesSourceSpec(std::istream& is);
+unique_ptr<TimeSeriesSourceSpec> deserializeTimeSeriesSourceSpec(std::istream& is);
 
-TimeSeriesSource* deserializeTimeSeriesSource(std::istream& is);

@@ -117,6 +117,15 @@ ostream& ChannelTemplate::exportInstruments(ostream& os) {
     return os;
 }
 
+void ChannelTemplate::clearConfig() {
+    for(auto& noteHitStep : noteHitSteps) {
+        delete noteHitStep;
+    }
+    for(auto& noteTickStep : noteTickSteps) {
+        delete noteTickStep;
+    }
+}
+
 //Serializer
 ostream& operator<<(ostream& os, const ChannelTemplate& ct) {
     os << "stride " << ct.stride << std::endl;

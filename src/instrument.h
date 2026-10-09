@@ -23,10 +23,9 @@ class NamedInstrumentParam {
 class Instrument {
     public:
     std::string name;
-    std::vector<TimeSeriesSource*> envelopes;
+    std::vector<unique_ptr<TimeSeriesSource>> envelopes;
     std::vector<NamedInstrumentParam> params;
     void renderConfigUI();
-
     friend ostream& operator<<(ostream& os, const Instrument& inst);
     friend istream& operator>>(istream& is, Instrument& inst);
 };
@@ -34,7 +33,7 @@ class Instrument {
 class TemplateInstrument {
     public:
     std::string name;
-    std::vector<TimeSeriesSourceSpec*> envelopes;
+    std::vector<unique_ptr<TimeSeriesSourceSpec>> envelopes;
     std::vector<NamedInstrumentParamTemplate> params;
     void renderConfigUI();
     Instrument create();
