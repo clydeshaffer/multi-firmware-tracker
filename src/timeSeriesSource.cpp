@@ -24,11 +24,23 @@ int ArrayEnvSource::evaluate(int initial, int t) {
 
 void ArrayEnvSource::draw_instrument_ui() {
     ImGui::TextUnformatted(parent->name.c_str());
+    if(ImGui::Button("-")) {
+		if(envelopeData.size() > 1) {
+				envelopeData.pop_back();
+		}
+    }
+    ImGui::SameLine();
     for(int i = 0; i < envelopeData.size(); ++i) {
         ImGui::PushID(i);
         if(i > 0) ImGui::SameLine();
         ImGui::VSliderScalar("##envSlider",ImVec2(8,64), ImGuiDataType_U8, &(envelopeData[i]), &parent->min, &parent->max, nullptr, ImGuiSliderFlags_AlwaysClamp);
         ImGui::PopID();
+    }
+    ImGui::SameLine();
+    if(ImGui::Button("+")) {
+		int lastVal = envelopeData.back();
+		envelopeData.emplace_back();
+		envelopeData.back() = lastVal;
     }
 }
 
