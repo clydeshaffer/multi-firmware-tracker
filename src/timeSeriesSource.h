@@ -51,6 +51,7 @@ class ArrayEnvSource : public TimeSeriesSource {
     private:
         ArrayEnvSourceSpec* parent;
         std::vector<int> envelopeData;
+        std::vector<bool> stepIsKeyFrame;
 };
 
 ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tss);

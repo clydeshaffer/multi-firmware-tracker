@@ -8,10 +8,14 @@ unique_ptr<TimeSeriesSource> ArrayEnvSourceSpec::create() {
 
 ArrayEnvSource::ArrayEnvSource(ArrayEnvSourceSpec* spec) : parent(spec) {
     envelopeData.resize(16);
+    stepIsKeyFrame.resize(16);
     for(int i = 0; i < 16; i++) {
         envelopeData[i] = 16 - i;
+        stepIsKeyFrame[i] = false;
     }
     envelopeData[15] = 0;
+    stepIsKeyFrame[0] = true;
+    stepIsKeyFrame[15] = true;
 }
 
 int ArrayEnvSource::evaluate(int initial, int t) {
@@ -30,10 +34,32 @@ void ArrayEnvSource::draw_instrument_ui() {
 		}
     }
     ImGui::SameLine();
+    bool wasModified = false;
     for(int i = 0; i < envelopeData.size(); ++i) {
         ImGui::PushID(i);
         if(i > 0) ImGui::SameLine();
-        ImGui::VSliderScalar("##envSlider",ImVec2(8,64), ImGuiDataType_U8, &(envelopeData[i]), &parent->min, &parent->max, nullptr, ImGuiSliderFlags_AlwaysClamp);
+        bool stepWasKeyFrame = stepIsKeyFrame[i];
+        if(stepWasKeyFrame) {
+            ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.9f, 0.9f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.3f, 0.3f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.5f, 0.5f, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.4f, 0.4f, 0.0f, 1.0f));
+        }
+        if(ImGui::VSliderScalar("##envSlider",ImVec2(8,64), ImGuiDataType_U8, &(envelopeData[i]), &parent->min, &parent->max, nullptr, ImGuiSliderFlags_AlwaysClamp)) {
+            stepIsKeyFrame[i] = true;
+            wasModified = true;
+        } else if(ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+            stepIsKeyFrame[i] = false;
+            wasModified = true;
+        }
+        if(stepWasKeyFrame) {
+            ImGui::PopStyleColor();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleColor();
+        }
         ImGui::PopID();
     }
     ImGui::SameLine();
@@ -41,6 +67,23 @@ void ArrayEnvSource::draw_instrument_ui() {
 		int lastVal = envelopeData.back();
 		envelopeData.emplace_back();
 		envelopeData.back() = lastVal;
+    }
+    if(wasModified) {
+        int lastKeyFrameIdx = -1;
+        for(int i = 0; i < envelopeData.size(); ++i) {
+            if(stepIsKeyFrame[i]) {
+                if(lastKeyFrameIdx != -1) {
+                    int frameDelta = i - lastKeyFrameIdx;
+                    int valueDelta = envelopeData[i] - envelopeData[lastKeyFrameIdx];
+                    if(frameDelta > 1) {
+                        for(int inter = 1; inter < frameDelta; ++inter) {
+                            envelopeData[lastKeyFrameIdx + inter] = envelopeData[lastKeyFrameIdx] + ((valueDelta * inter) / frameDelta);
+                        } 
+                    }
+                }
+                lastKeyFrameIdx = i;
+            }
+        }
     }
 }
 
@@ -69,18 +112,32 @@ void ArrayEnvSourceSpec::scan(std::istream& is) {
 
 void ArrayEnvSource::print(std::ostream& os) const {
     os << envelopeData.size();
-    for(auto& envSlice : envelopeData) {
-        os << " " << envSlice;
+    for(int i = 0; i < envelopeData.size(); ++i) {
+        if(stepIsKeyFrame[i]) {
+            os << " k";
+        }
+        os << " " << envelopeData[i];
     }
     os << std::endl;
 }
 
 void ArrayEnvSource::scan(std::istream& is) {
     int arraySize;
+    char letter;
     is >> arraySize;
     envelopeData.resize(arraySize);
+    stepIsKeyFrame.resize(arraySize);
     for(int i = 0; i < arraySize; ++i) {
-        is >> envelopeData[i];
+        if(is >> envelopeData[i]) {
+            stepIsKeyFrame[i] = false;
+        } else {
+            is.clear();
+            is >> letter;
+            if(letter == 'k') {
+                stepIsKeyFrame[i] = true;
+            }
+            is >> envelopeData[i];
+        }
     }
 }
 
