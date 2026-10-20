@@ -80,6 +80,7 @@ int keynotes_09[10] = {
 char const *songFilterPatterns[1] = {"*.mft"};
 char const *configFilterPatterns[1] = {"*.ini"};
 char const *firmwareFilterPatterns[1] = {"*.bin"};
+char const *exportFilterPatterns[1] = {"*.bin"};
 
 int octave = 4;
 int selectedInstrumentIdx = 0;
@@ -221,6 +222,37 @@ void save_song(const char* name) {
     songFileOut << "speed " << playingStepTime << std::endl;
     songFileOut << "patternLength " << patternLengthInRows << std::endl;
     songFileOut.close();
+}
+
+void export_song(const char* name) {
+	if(name == nullptr) return;
+	std::ofstream exportFileOut(name, std::ios::binary);
+
+	exportFileOut.put((char) playingStepTime);
+	exportFileOut.put((char) patternLengthInRows);
+    std::streampos channelPointerTablePos = exportFileOut.tellp();
+    std::vector<std::streampos> blockPositions;
+    for(auto& channel : channelStates) {
+		exportFileOut.put(0); exportFileOut.put(0);
+	}
+
+	mainChannelTemplate.writeBinary(exportFileOut);
+
+	for(auto& channel : channelStates) {
+        blockPositions.emplace_back(exportFileOut.tellp());
+		channel.patterns.writeBinary(exportFileOut, patternLengthInRows);
+	}
+
+    std::streampos currentEnd = exportFileOut.tellp();
+    exportFileOut.seekp(channelPointerTablePos);
+    for(auto& blockPos : blockPositions) {
+        uint16_t offset = blockPos;
+        exportFileOut.put((char) (offset & 0xFF));
+        exportFileOut.put((char) (offset >> 8));
+    }
+    exportFileOut.seekp(currentEnd);
+
+	exportFileOut.close();
 }
 
 void save_firmware_config(const char* name) { 
@@ -442,6 +474,9 @@ int main(int argC, char* argV[]) {
                 }
                 if(ImGui::MenuItem("Save Song")) {
                     save_song(tinyfd_saveFileDialog("Save song file", "", 1, songFilterPatterns, "MultiFirmwareTracker songs"));
+                }
+                if(ImGui::MenuItem("Export Song")) {
+                    export_song(tinyfd_saveFileDialog("Export song binary", "", 1, exportFilterPatterns, "Binary file"));
                 }
                 if(ImGui::MenuItem("Exit")) {
                     quit = true;

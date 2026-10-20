@@ -121,6 +121,15 @@ void ArrayEnvSource::print(std::ostream& os) const {
     os << std::endl;
 }
 
+void ArrayEnvSource::writeBinary(std::ostream& os) const {
+  os.put((char)envelopeData.size());
+    for(int i = 0; i < envelopeData.size(); ++i) {
+        //os.put((char)(128 - (envelopeData[i] * 8)));
+        os.put((char)((-128 * (envelopeData[i]) / (16)) + 128));
+    }
+   
+}
+
 void ArrayEnvSource::scan(std::istream& is) {
     int arraySize;
     char letter;

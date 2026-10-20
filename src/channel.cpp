@@ -109,6 +109,31 @@ std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
     return out;
 }
 
+void ChannelTemplate::writeBinary(ostream& os) {
+	os.put((char) instruments.size());
+
+    std::streampos instPointerTablePos = os.tellp();
+    std::vector<std::streampos> instPositions;
+
+    for(auto& instr : instruments) {
+        os.put(0); os.put(0);
+	}
+
+	for(auto& instr : instruments) {
+        instPositions.emplace_back(os.tellp());
+		instr.writeBinary(os);
+	}
+
+    std::streampos currentEnd = os.tellp();
+    os.seekp(instPointerTablePos);
+    for(auto& instPos : instPositions) {
+        uint16_t offset = instPos;
+        os.put((char) (offset & 0xFF));
+        os.put((char) (offset >> 8));
+	}
+    os.seekp(currentEnd);
+}
+
 ostream& ChannelTemplate::exportInstruments(ostream& os) {
     for(auto& instr : instruments) {
         os << "instrument" << std::endl;

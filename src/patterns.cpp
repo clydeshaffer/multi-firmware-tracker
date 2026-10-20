@@ -48,6 +48,49 @@ void PatternLibrary::clear(int paramCount) {
 	}
 }
 
+void PatternLibrary::writeBinary(ostream& os, size_t patLength) {
+	char outbuf[256];
+	size_t outbuf_len;
+
+    if(paramPatterns.size() == 0) return;
+
+    int patternCount = paramPatterns[0].size();
+
+    os.put((char) patternCount);
+    os.put((char) patternSequence.size());
+
+    std::streampos patternPointerTablePos = os.tellp();
+    std::vector<std::streampos> patternPositions;
+
+    for(int patIdx = 0; patIdx <= patternCount; ++patIdx) {
+        os.put(0); os.put(0);
+    }
+
+    patternPositions.emplace_back(os.tellp());
+
+    for(int seqIdx = 0; seqIdx < patternSequence.size(); ++seqIdx) {
+        os.put(patternSequence[seqIdx]);
+    }
+
+    for(int patIdx = 0; patIdx < patternCount; ++patIdx) {
+        patternPositions.emplace_back(os.tellp());
+        for(int stepIdx = 0; stepIdx < patLength; ++stepIdx) {
+            for(int paramIdx = 0; paramIdx < paramPatterns.size(); ++paramIdx) {
+                os.put((char) paramPatterns[paramIdx][patIdx][stepIdx]);
+            }
+        }
+    }
+
+    std::streampos currentEnd = os.tellp();
+    os.seekp(patternPointerTablePos);
+    for(int patIdx = 0; patIdx < patternPositions.size(); ++patIdx) {
+        uint16_t offset = patternPositions[patIdx];
+        os.put((char) (offset & 0xFF));
+        os.put((char) (offset >> 8));
+    }
+    os.seekp(currentEnd);
+}
+
 ostream& operator<<(ostream& os, const PatternLibrary& patlib) {
     os << patlib.paramPatterns.size() << std::endl;
     for(auto& patternsForParam : patlib.paramPatterns) {

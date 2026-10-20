@@ -22,6 +22,7 @@ class ChannelTemplate {
     void renderConfigUI();
     ostream& exportInstruments(ostream& os);
     void clearConfig();
+    void writeBinary(ostream& os);
 
     friend ostream& operator<<(ostream& os, const ChannelTemplate& ct);
     friend istream& operator>>(istream& is, ChannelTemplate& ct);

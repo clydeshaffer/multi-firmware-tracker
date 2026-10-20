@@ -94,6 +94,30 @@ istream& operator>>(istream& is, TemplateInstrument& ti) {
     return is;
 }
 
+
+void Instrument::writeBinary(ostream& os) {
+    for(auto& param : params) {
+        os.put((char)param.value);
+    } 
+    std::streampos pointerTablePos = os.tellp();
+    std::vector<std::streampos> blockPositions;
+    for(auto& envelope : envelopes) {
+        os.put(0); os.put(0);
+    }
+    for(auto& envelope : envelopes) {
+        blockPositions.emplace_back(os.tellp());
+        envelope->writeBinary(os);
+    }
+    std::streampos currentEnd = os.tellp();
+    os.seekp(pointerTablePos);
+    for(auto& blockPos : blockPositions) {
+        uint16_t offset = blockPos;
+        os.put((char) (offset & 0xFF));
+        os.put((char) (offset >> 8));
+    }
+    os.seekp(currentEnd);
+}
+
 ostream& operator<<(ostream& os, const Instrument& inst) {
     os << "\"" << inst.name << "\"" << std::endl;
     for(auto& envelope : inst.envelopes) {

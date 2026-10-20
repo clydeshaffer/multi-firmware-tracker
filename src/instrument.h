@@ -26,6 +26,7 @@ class Instrument {
     std::vector<unique_ptr<TimeSeriesSource>> envelopes;
     std::vector<NamedInstrumentParam> params;
     void renderConfigUI();
+    void writeBinary(ostream& os);
     friend ostream& operator<<(ostream& os, const Instrument& inst);
     friend istream& operator>>(istream& is, Instrument& inst);
 };

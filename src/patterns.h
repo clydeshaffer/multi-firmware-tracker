@@ -21,6 +21,7 @@ class PatternLibrary {
     void addParam();
     void clear(int paramCount);
     vector<int> patternSequence;
+    void writeBinary(ostream& os, size_t patLength);
 };
 
 ostream& operator<<(ostream& os, const PatternLibrary& patlib);
