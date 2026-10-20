@@ -93,6 +93,10 @@ std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
         return out;
     }
 
+    if(base.instruments[lastInstrumentIndex].vacant) {
+        return silence(channelIdx);
+    }
+
     ProcessingState ps(framesSinceNote, lastEventParams, base.instruments[lastInstrumentIndex]);
     for(auto& step : base.noteTickSteps) {
         step->exec(&ps);
@@ -154,6 +158,16 @@ void ChannelTemplate::writeBinary(ostream& os) {
         os.put((char) (offset >> 8));
 	}
     os.seekp(currentEnd);
+}
+
+void ChannelTemplate::addInstrument(Instrument instrument) {
+    for(int instIdx = 0; instIdx < instruments.size(); ++instIdx) {
+        if(instruments[instIdx].vacant) {
+            instruments[instIdx] = std::move(instrument);
+            return;
+        }
+    }
+    instruments.emplace_back(std::move(instrument));
 }
 
 ostream& ChannelTemplate::exportInstruments(ostream& os) {

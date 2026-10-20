@@ -130,6 +130,10 @@ void ArrayEnvSource::writeBinary(std::ostream& os) const {
    
 }
 
+std::unique_ptr<TimeSeriesSource> ArrayEnvSource::clone() const {
+    return std::make_unique<ArrayEnvSource>(*this);
+}
+
 void ArrayEnvSource::scan(std::istream& is) {
     int arraySize;
     char letter;

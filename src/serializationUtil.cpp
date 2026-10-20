@@ -13,7 +13,6 @@ std::istream& getQuotedString(std::istream& is, std::string& str) {
         }
         return is;
     } else {
-        std::cout << "expected quote mark and got " << quote << std::endl;
         is.setstate(std::ios_base::failbit);
         return is;
     }

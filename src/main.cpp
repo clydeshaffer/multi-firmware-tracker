@@ -96,6 +96,7 @@ void runWriteList(vector<MemWrite> writes) {
 }
 
 void playNote(int channel, int note, int instrument) {
+    if(mainChannelTemplate.instruments[instrument].vacant) return;
     vector<int> params;
     params.emplace_back(note);
     params.emplace_back(0);
@@ -161,6 +162,18 @@ void musicPlaybackWorkerLoop(std::atomic<bool>& quit) {
 
 int sprintfNoteName(char* str, int note) {
     return sprintf(str, "%s%01d", noteNames[note % 12], ((int) (note / 12)) - 1);
+}
+
+void instrumentRowPopup(int row) {
+    if(ImGui::BeginPopupContextItem("instrument_context_menu")) {
+        if(ImGui::MenuItem("Remove")) {
+            mainChannelTemplate.instruments[row].vacant = true;
+        }
+        if(ImGui::MenuItem("Duplicate")) {
+            mainChannelTemplate.addInstrument(mainChannelTemplate.instruments[row]);
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void sequenceRowPopup(int row) {
@@ -608,16 +621,23 @@ int main(int argC, char* argV[]) {
             ImGui::TextUnformatted("Instruments");
             ImGui::SameLine();
             if(ImGui::Button("+##AddInstrument")) {
-                mainChannelTemplate.instruments.emplace_back(mainChannelTemplate.templateInstrument.create());
+                mainChannelTemplate.addInstrument(mainChannelTemplate.templateInstrument.create());
             }
             int instrIdx = 0;
             for(auto& instrument : mainChannelTemplate.instruments) {
-                ImGui::PushID(instrIdx);
-                if(ImGui::Selectable(instrument.name.c_str(), instrIdx == selectedInstrumentIdx)) {
-                    selectedInstrumentIdx = instrIdx;
+                if(!instrument.vacant) {
+                    ImGui::PushID(instrIdx);
+                    char name[128];
+                    snprintf(name, 128, "%d - %s", instrIdx, instrument.name.c_str());
+                    name[127] = 0;
+                    if(ImGui::Selectable(name, instrIdx == selectedInstrumentIdx)) {
+                        selectedInstrumentIdx = instrIdx;
+                    }
+                    instrumentRowPopup(instrIdx);
+                    ImGui::PopID();
+                    
                 }
                 instrIdx++;
-                ImGui::PopID();
             }
         }
         ImGui::EndChild();
@@ -672,11 +692,17 @@ int main(int argC, char* argV[]) {
                         }
                     }
 		    cellLabel[cellLabelOffset] = 0;
+                    if(mainChannelTemplate.instruments[te[1]].vacant) {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
+                    } else {
+                        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+                    }
                     if(ImGui::Selectable(cellLabel,  (tableRowIdx == selectedPatRowIdx) && (tableColIdx == selectedPatColIdx), 0)) {
                         selectedPatRowIdx = tableRowIdx;
                         selectedPatColIdx = tableColIdx;
  
                     }
+                    ImGui::PopStyleColor();
                     ImGui::PopID();
                 }
                 ImGui::PopID();

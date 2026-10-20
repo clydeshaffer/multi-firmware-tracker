@@ -20,6 +20,7 @@ class TimeSeriesSource {
     virtual void print(std::ostream& os) const {}
     virtual void scan(std::istream& is) {}
     virtual void writeBinary(std::ostream& os) const {}
+    virtual std::unique_ptr<TimeSeriesSource> clone() const = 0;
 };
 
 class TimeSeriesSourceSpec {
@@ -49,7 +50,8 @@ class ArrayEnvSource : public TimeSeriesSource {
         TimeSeriesSourceType type();
         void print(std::ostream& os) const override;
         void scan(std::istream& is) override;
-	void writeBinary(std::ostream& os) const override;
+    	void writeBinary(std::ostream& os) const override;
+        std::unique_ptr<TimeSeriesSource> clone() const override;
     private:
         ArrayEnvSourceSpec* parent;
         std::vector<int> envelopeData;

@@ -4,6 +4,11 @@
 #include "hash.h"
 #include "serializationUtil.h"
 
+
+Instrument::Instrument(Instrument&& other) noexcept = default;
+Instrument& Instrument::operator=(Instrument&& other) noexcept = default;
+Instrument::~Instrument() = default;
+
 Instrument TemplateInstrument::create() {
     Instrument instr;
     instr.name = name;
@@ -17,6 +22,21 @@ Instrument TemplateInstrument::create() {
         instr.params.emplace_back(nip);
     }
     return instr;
+}
+
+Instrument::Instrument(const Instrument& other) : name(other.name), params(other.params), vacant(other.vacant) {
+    envelopes.reserve(other.envelopes.size());
+    for (const auto& env : other.envelopes) {
+        envelopes.push_back(env->clone()); 
+    }
+}
+
+Instrument& Instrument::operator=(const Instrument& other) {
+    if (this != &other) {
+        Instrument temp(other);
+        std::swap(*this, temp);
+    }
+    return *this;
 }
 
 void TemplateInstrument::renderConfigUI() {
@@ -119,12 +139,16 @@ void Instrument::writeBinary(ostream& os) {
 }
 
 ostream& operator<<(ostream& os, const Instrument& inst) {
-    os << "\"" << inst.name << "\"" << std::endl;
-    for(auto& envelope : inst.envelopes) {
-        envelope->print(os);
-    }
-    for(auto& param : inst.params) {
-        os << param.value << " ";
+    if(inst.vacant) {
+        os << "DELETED" << std::endl;
+    } else {
+        os << "\"" << inst.name << "\"" << std::endl;
+        for(auto& envelope : inst.envelopes) {
+            envelope->print(os);
+        }
+        for(auto& param : inst.params) {
+            os << param.value << " ";
+        }
     }
     os << std::endl;
     return os;
@@ -132,11 +156,19 @@ ostream& operator<<(ostream& os, const Instrument& inst) {
 
 istream& operator>>(istream& is, Instrument& inst) {
     getQuotedString(is, inst.name);
-    for(auto& envelope : inst.envelopes) {
-        envelope->scan(is);
-    }
-    for(auto& param : inst.params) {
-        is >> param.value;
+    if(is.fail()) {
+        inst.vacant = true;
+        is.clear();
+        is.unget();
+        is >> inst.name;
+    } else {
+        inst.vacant = false;
+        for(auto& envelope : inst.envelopes) {
+            envelope->scan(is);
+        }
+        for(auto& param : inst.params) {
+            is >> param.value;
+        }
     }
     return is;
 }

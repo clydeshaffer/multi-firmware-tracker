@@ -25,6 +25,16 @@ class Instrument {
     std::string name;
     std::vector<unique_ptr<TimeSeriesSource>> envelopes;
     std::vector<NamedInstrumentParam> params;
+    bool vacant = false;
+
+    Instrument() = default;
+    Instrument(const Instrument& other);
+    Instrument& operator=(const Instrument& other);
+
+    Instrument(Instrument&& other) noexcept;
+    Instrument& operator=(Instrument&& other) noexcept;
+    ~Instrument();
+    
     void renderConfigUI();
     void writeBinary(ostream& os);
     friend ostream& operator<<(ostream& os, const Instrument& inst);
