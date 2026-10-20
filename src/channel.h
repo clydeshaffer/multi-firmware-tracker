@@ -18,6 +18,7 @@ class ChannelTemplate {
     std::vector<NamedOffset> outputs;
     std::vector<ProcessStep*> noteHitSteps;
     std::vector<ProcessStep*> noteTickSteps;
+    std::vector<ProcessStep*> silenceChannelSteps;
 
     void renderConfigUI();
     ostream& exportInstruments(ostream& os);
@@ -38,4 +39,5 @@ class Channel {
     PatternLibrary patterns;
     std::vector<MemWrite> processNoteHit(int channelIdx, std::vector<int> params,int instrumentIdx);
     std::vector<MemWrite> processNoteTick(int channelIdx);
+    std::vector<MemWrite> silence(int channelIdx);
 };

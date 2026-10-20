@@ -113,6 +113,13 @@ void tickChannels() {
     }
 }
 
+void silenceAllChannels() {
+    for(int i = 0; i < numChannels; ++i) {
+        auto silenceWrites = channelStates[i].silence(i);
+        runWriteList(silenceWrites);
+    }
+}
+
 void tickPlayback() {
     if(playing) {
         playingStepTimer ++;
@@ -183,6 +190,68 @@ void sequenceRowPopup(int row) {
         }
         ImGui::EndPopup();
     }
+}
+
+void DrawSequenceWindow() {
+    ImGui::Begin("sequences");
+
+        if(ImGui::Button("-##DecPattern")) {
+            if(channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx]) {
+                --channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx];
+            }
+        }
+        ImGui::SameLine();
+        if(ImGui::Button("+##IncPattern")) {
+            if(channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx] >= (channelStates[selectedSeqColIdx].patterns.paramPatterns[0].size() - 1)) {
+                channelStates[selectedSeqColIdx].patterns.addPattern();
+            }
+            ++channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx];
+        }
+
+        if(ImGui::BeginTable("sequenceView", numChannels+2, ImGuiTableFlags_Borders | ImGuiTableFlags_NoHostExtendX | ImGuiTableFlags_SizingFixedFit)) {
+            for(int tableRowIdx = 0; tableRowIdx < songLengthInPatterns; ++tableRowIdx) { 
+                ImGui::PushID(tableRowIdx);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                char label[16];
+                char cellLabel[16];
+                sprintf(label, "%02x", tableRowIdx);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.3f, 1.0f));
+                if(ImGui::Selectable(label, tableRowIdx == selectedSeqRowIdx)) {
+                    selectedSeqRowIdx = tableRowIdx;
+                }
+                ImGui::PopStyleColor();
+                sequenceRowPopup(tableRowIdx);
+
+                if(tableRowIdx == selectedSeqRowIdx) {
+                    ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.7f, 1.0f));
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
+                }
+                for(int tableColIdx = 0; tableColIdx < numChannels; ++tableColIdx) {
+                    ImGui::PushID(tableColIdx);
+                    ImGui::TableSetColumnIndex(tableColIdx+1);
+                    //ImGui::TextUnformatted("00");
+                    ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+                    if((tableColIdx == selectedSeqColIdx) && (tableRowIdx == selectedSeqRowIdx)) {
+                        ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, bg_color);
+                    }
+                    sprintf(cellLabel, "%02x", channelStates[tableColIdx].patterns.patternSequence[tableRowIdx]);
+                    if(ImGui::Selectable(cellLabel, (tableRowIdx == selectedSeqRowIdx) && (tableColIdx == selectedSeqColIdx))) {
+                        selectedSeqRowIdx = tableRowIdx;
+                        selectedSeqColIdx = tableColIdx;
+                    }
+                    ImGui::PopStyleColor();
+                    sequenceRowPopup(tableRowIdx);
+                    ImGui::PopID();
+                }
+                ImGui::PopID();
+            }
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted("  ");
+            ImGui::EndTable();
+        }
+        ImGui::End();
 }
 
 void open_song(const char* name) {
@@ -398,6 +467,8 @@ int main(int argC, char* argV[]) {
                     playing = !playing;
                     if(playing) {
                         playingStepTimer = 0;
+                    } else {
+                        silenceAllChannels();
                     }
                     selectedPatRowIdx = 0;
                     break;
@@ -501,6 +572,7 @@ int main(int argC, char* argV[]) {
         if(playing) {
             if(ImGui::Button("stop")) {
                 playing = false;
+                silenceAllChannels();
             }
         } else {
             if(ImGui::Button("play")) {
@@ -527,70 +599,11 @@ int main(int argC, char* argV[]) {
             if(patternLengthInRows < 1) patternLengthInRows = 1;
             if(patternLengthInRows >= 256) patternLengthInRows = 256;
         }
+
         ImGui::InputInt("Octave", &octave, 1, 1);
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-        ImGui::BeginChild("sequences", ImVec2(0, 128), ImGuiChildFlags_Border | ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AlwaysUseWindowPadding);
-
-        if(ImGui::Button("-##DecPattern")) {
-            if(channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx]) {
-                --channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx];
-            }
-        }
-        ImGui::SameLine();
-        if(ImGui::Button("+##IncPattern")) {
-            if(channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx] >= (channelStates[selectedSeqColIdx].patterns.paramPatterns[0].size() - 1)) {
-                channelStates[selectedSeqColIdx].patterns.addPattern();
-            }
-            ++channelStates[selectedSeqColIdx].patterns.patternSequence[selectedSeqRowIdx];
-        }
-
-        if(ImGui::BeginTable("sequenceView", numChannels+2, ImGuiTableFlags_Borders | ImGuiTableFlags_NoHostExtendX | ImGuiTableFlags_SizingFixedFit)) {
-            for(int tableRowIdx = 0; tableRowIdx < songLengthInPatterns; ++tableRowIdx) { 
-                ImGui::PushID(tableRowIdx);
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                char label[16];
-                char cellLabel[16];
-                sprintf(label, "%02x", tableRowIdx);
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.3f, 1.0f));
-                if(ImGui::Selectable(label, tableRowIdx == selectedSeqRowIdx)) {
-                    selectedSeqRowIdx = tableRowIdx;
-                }
-                ImGui::PopStyleColor();
-                sequenceRowPopup(tableRowIdx);
-
-                if(tableRowIdx == selectedSeqRowIdx) {
-                    ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.7f, 1.0f));
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, bg_color);
-                }
-                for(int tableColIdx = 0; tableColIdx < numChannels; ++tableColIdx) {
-                    ImGui::PushID(tableColIdx);
-                    ImGui::TableSetColumnIndex(tableColIdx+1);
-                    //ImGui::TextUnformatted("00");
-                    ImGui::PushStyleColor(ImGuiCol_TextSelectedBg, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-                    if((tableColIdx == selectedSeqColIdx) && (tableRowIdx == selectedSeqRowIdx)) {
-                        ImU32 bg_color = ImGui::GetColorU32(ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-                        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, bg_color);
-                    }
-                    sprintf(cellLabel, "%02x", channelStates[tableColIdx].patterns.patternSequence[tableRowIdx]);
-                    if(ImGui::Selectable(cellLabel, (tableRowIdx == selectedSeqRowIdx) && (tableColIdx == selectedSeqColIdx))) {
-                        selectedSeqRowIdx = tableRowIdx;
-                        selectedSeqColIdx = tableColIdx;
-                    }
-                    ImGui::PopStyleColor();
-                    sequenceRowPopup(tableRowIdx);
-                    ImGui::PopID();
-                }
-                ImGui::PopID();
-            }
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted("  ");
-            ImGui::EndTable();
-        }
-        ImGui::EndChild();
-
-        ImGui::SameLine();
+        
         if(ImGui::BeginChild("instruments", ImVec2(128, 128), ImGuiChildFlags_Border)) {
             ImGui::TextUnformatted("Instruments");
             ImGui::SameLine();
@@ -696,6 +709,8 @@ int main(int argC, char* argV[]) {
             mainChannelTemplate.instruments[selectedInstrumentIdx].renderConfigUI();
         }
         ImGui::End();
+
+        DrawSequenceWindow();
 
         ImGui::Render();
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());

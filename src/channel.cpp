@@ -109,6 +109,28 @@ std::vector<MemWrite> Channel::processNoteTick(int channelIdx) {
     return out;
 }
 
+std::vector<MemWrite> Channel::silence(int channelIdx) {
+    if((lastInstrumentIndex < 0) || (lastInstrumentIndex >= base.instruments.size())) {
+        std::vector<MemWrite> out;
+        return out;
+    }
+
+    ProcessingState ps(framesSinceNote, lastEventParams, base.instruments[lastInstrumentIndex]);
+    for(auto& step : base.silenceChannelSteps) {
+        step->exec(&ps);
+    }
+    
+    std::vector<MemWrite> out;
+    for(auto& pw : ps.output) {
+        MemWrite mw;
+        mw.address = base.outputs[pw.paramIdx].offset + (channelIdx * base.stride);
+        mw.value = pw.value;
+        out.emplace_back(mw);
+    }
+    lastInstrumentIndex = -1;
+    return out;
+}
+
 void ChannelTemplate::writeBinary(ostream& os) {
 	os.put((char) instruments.size());
 
@@ -167,6 +189,9 @@ ostream& operator<<(ostream& os, const ChannelTemplate& ct) {
     for(auto& noteTickStep : ct.noteTickSteps) {
         os << "noteTickStep " << (*noteTickStep) << std::endl;
     }
+    for(auto& silenceChannelStep : ct.silenceChannelSteps) {
+        os << "silenceChannelStep " << (*silenceChannelStep) << std::endl;
+    }
     os << "endStruct" << std::endl;
     return os;
 }
@@ -201,6 +226,9 @@ istream& operator>>(istream& is, ChannelTemplate& ct) {
             break;
             case constHash("noteTickStep"):
             ct.noteTickSteps.emplace_back(deserializeProcessStep(is));
+            break;
+            case constHash("silenceChannelStep"):
+            ct.silenceChannelSteps.emplace_back(deserializeProcessStep(is));
             break;
 
             //Used in song loading
