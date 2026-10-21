@@ -477,7 +477,7 @@ int main(int argC, char* argV[]) {
             {
                 quit = true;
             }
-            if((e.type == SDL_KEYDOWN) && !ImGui::IsAnyItemFocused()) {
+            if((e.type == SDL_KEYDOWN) && !mainImguiIO.WantTextInput) {
 
                 int noteNum = 255;
                 if((e.key.keysym.sym >= SDLK_a) && (e.key.keysym.sym <= SDLK_z)) {
