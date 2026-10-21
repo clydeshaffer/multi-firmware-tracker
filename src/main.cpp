@@ -13,6 +13,7 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include "whereami/whereami.h"
 
 #include "imgui.h"
 #include "implot.h"
@@ -181,9 +182,7 @@ void sequenceRowPopup(int row) {
         if(ImGui::MenuItem("Insert Frame")) {
             for(auto& channel : channelStates) {
                 int num = channel.patterns.paramPatterns[0].size();
-                if(channel.patterns.paramPatterns[0].size() <= num) {
-                    channel.patterns.addPattern();
-                }
+                channel.patterns.addPattern();
                 channel.patterns.patternSequence.insert(channel.patterns.patternSequence.begin() + row + 1, num);
             }
             ++songLengthInPatterns;
@@ -192,6 +191,15 @@ void sequenceRowPopup(int row) {
             for(auto& channel : channelStates) {
                 int num = channel.patterns.patternSequence[row];
                 channel.patterns.patternSequence.insert(channel.patterns.patternSequence.begin() + row, num);
+            }
+            ++songLengthInPatterns;
+        }
+        if(ImGui::MenuItem("Clone")) {
+            for(auto& channel : channelStates) {
+                int num = channel.patterns.paramPatterns[0].size();
+                int srcNum = channel.patterns.patternSequence[row];
+                channel.patterns.addPatternCopy(srcNum);
+                channel.patterns.patternSequence.insert(channel.patterns.patternSequence.begin() + row + 1, num);
             }
             ++songLengthInPatterns;
         }
@@ -206,6 +214,9 @@ void sequenceRowPopup(int row) {
 }
 
 void DrawSequenceWindow() {
+    int move_from, move_to;
+    bool do_move = false;
+
     ImGui::Begin("sequences");
 
         if(ImGui::Button("-##DecPattern")) {
@@ -229,9 +240,21 @@ void DrawSequenceWindow() {
                 char label[16];
                 char cellLabel[16];
                 sprintf(label, "%02x", tableRowIdx);
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.3f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.3f, 1.0f)));
                 if(ImGui::Selectable(label, tableRowIdx == selectedSeqRowIdx)) {
                     selectedSeqRowIdx = tableRowIdx;
+                }
+                if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                    ImGui::SetDragDropPayload("SEQUENCE_ROW", &tableRowIdx, sizeof(int));
+                    ImGui::EndDragDropSource();
+                }
+                if(ImGui::BeginDragDropTarget()) {
+                     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SEQUENCE_ROW")) {
+                        move_from = *(const int*)payload->Data;
+                        move_to = tableRowIdx;
+                        do_move = true;
+                    }
                 }
                 ImGui::PopStyleColor();
                 sequenceRowPopup(tableRowIdx);
@@ -265,6 +288,15 @@ void DrawSequenceWindow() {
             ImGui::EndTable();
         }
         ImGui::End();
+
+
+        if(do_move) {
+            for(auto& channel : channelStates) {
+                auto row_to_move = channel.patterns.patternSequence[move_from];
+                channel.patterns.patternSequence.erase(channel.patterns.patternSequence.begin() + move_from);
+                channel.patterns.patternSequence.insert(channel.patterns.patternSequence.begin() + move_to, row_to_move);
+            }
+        }
 }
 
 void open_song(const char* name) {
@@ -361,12 +393,38 @@ void load_firmware_config(const char* name) {
 }
 
 int main(int argC, char* argV[]) {
+
     SDL_Init(SDL_INIT_VIDEO);
 	atexit(SDL_Quit);
 
     mainWindow = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1024, 768, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 	mainRenderer = SDL_CreateRenderer(mainWindow, -1, SDL_RENDERER_ACCELERATED);
     main_imgui_ctx = ImGui::CreateContext();
+
+    ImGuiIO& mainImguiIO = ImGui::GetIO();
+
+    char* executableLocation;
+    int exePathLength = wai_getExecutablePath(NULL, 0, NULL);
+    int exeDirectoryLength;
+    executableLocation = (char*) malloc(exePathLength);
+    wai_getExecutablePath(executableLocation, exePathLength, &exeDirectoryLength);
+    executableLocation[exeDirectoryLength] = 0;
+    
+#define DEFAULT_INI_NAME "fm_firmware.ini"
+#define DEFAULT_FW_NAME "fm_firmware.bin"
+#define IMGUI_INI_NAME "imgui.ini"
+
+    char* defaultIniLocation = (char*) malloc(exeDirectoryLength + sizeof(DEFAULT_INI_NAME));
+    char* defaultFwBinLocation = (char*) malloc(exeDirectoryLength + sizeof(DEFAULT_FW_NAME));
+    char* imguiIniLocation = (char*) malloc(exeDirectoryLength + sizeof(IMGUI_INI_NAME));
+
+    sprintf(defaultIniLocation, "%s/%s", executableLocation, DEFAULT_INI_NAME);
+    sprintf(defaultFwBinLocation, "%s/%s", executableLocation, DEFAULT_FW_NAME);
+    sprintf(imguiIniLocation, "%s/%s", executableLocation, IMGUI_INI_NAME);
+
+    mainImguiIO.IniFilename = imguiIniLocation;
+
+
 	main_implot_ctx = ImPlot::CreateContext();
     ImGui::StyleColorsDark();
 	ImGui_ImplSDL2_InitForSDLRenderer(mainWindow, mainRenderer);
@@ -379,14 +437,21 @@ int main(int argC, char* argV[]) {
     //Event handler
     SDL_Event e; 
 
-    load_firmware_config("fm_firmware.ini");
+    
+
+
+    load_firmware_config(defaultIniLocation);
+
 
 
     soundcard = new AudioCoprocessor();
 
-    std:ifstream firmware_bin("fm_firmware.bin", std::ios::binary);
+    std:ifstream firmware_bin(defaultFwBinLocation, std::ios::binary);
     firmware_bin.read(reinterpret_cast<char*>(soundcard->singleton_acp_state->ram), AUDIO_RAM_SIZE);
     firmware_bin.close();
+
+    free(defaultIniLocation);
+    free(defaultFwBinLocation);
 
     AudioCoprocessor::singleton_acp_state->isEmulationPaused = false;
     soundcard->register_write(ACP_RESET, 1);
@@ -692,7 +757,7 @@ int main(int argC, char* argV[]) {
                         }
                     }
 		    cellLabel[cellLabelOffset] = 0;
-                    if(mainChannelTemplate.instruments[te[1]].vacant) {
+                    if((te[0] != 255) && !mainChannelTemplate.instrumentExists(te[1])) {
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
                     } else {
                         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));

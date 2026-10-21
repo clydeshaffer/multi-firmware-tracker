@@ -170,6 +170,11 @@ void ChannelTemplate::addInstrument(Instrument instrument) {
     instruments.emplace_back(std::move(instrument));
 }
 
+bool ChannelTemplate::instrumentExists(int idx) {
+    if(idx >= instruments.size()) return false;
+    return !(instruments[idx].vacant);
+}
+
 ostream& ChannelTemplate::exportInstruments(ostream& os) {
     for(auto& instr : instruments) {
         os << "instrument" << std::endl;

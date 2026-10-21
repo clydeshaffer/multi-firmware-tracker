@@ -31,6 +31,12 @@ void PatternLibrary::addPattern() {
     paramPatterns.front().back().fill(255);
 }
 
+void PatternLibrary::addPatternCopy(int idx) {
+    for(auto& param: paramPatterns) {
+        param.emplace_back(param[idx]);
+    }
+}
+
 void PatternLibrary::addParam() {
     paramPatterns.emplace_back();
     if(paramPatterns.size() != 0) {

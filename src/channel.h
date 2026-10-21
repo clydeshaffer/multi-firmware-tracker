@@ -25,6 +25,7 @@ class ChannelTemplate {
     void clearConfig();
     void writeBinary(ostream& os);
     void addInstrument(Instrument instrument);
+    bool instrumentExists(int idx);
 
     friend ostream& operator<<(ostream& os, const ChannelTemplate& ct);
     friend istream& operator>>(istream& is, ChannelTemplate& ct);

@@ -18,6 +18,7 @@ class PatternLibrary {
     vector<int> getEvent(int patternIdx, int eventIdx);
     void writeEvent(vector<int> params, int patternIdx, int row);
     void addPattern();
+    void addPatternCopy(int idx);
     void addParam();
     void clear(int paramCount);
     vector<int> patternSequence;
