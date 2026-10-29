@@ -50,6 +50,8 @@ int selectedPatColIdx = 0;
 int numChannels = 4;
 int songLengthInPatterns = 1;
 
+#define BIN_EXPORT_FMT_VERSION 0
+
 #define DEFAULT_PATTERN_LENGTH 32
 #define DEFAULT_SONG_SPEED 15
 int patternLengthInRows = DEFAULT_PATTERN_LENGTH;
@@ -341,9 +343,13 @@ void save_song(const char* name) {
 void export_song(const char* name) {
 	if(name == nullptr) return;
 	std::ofstream exportFileOut(name, std::ios::binary);
-
+    exportFileOut.put(BIN_EXPORT_FMT_VERSION);
 	exportFileOut.put((char) playingStepTime);
 	exportFileOut.put((char) patternLengthInRows);
+    exportFileOut.put(0); //reserved
+    exportFileOut.put(0); //reserved
+    exportFileOut.put(0); //reserved
+    exportFileOut.put(0); //reserved
     std::streampos channelPointerTablePos = exportFileOut.tellp();
     std::vector<std::streampos> blockPositions;
     for(auto& channel : channelStates) {
