@@ -8,6 +8,13 @@ Anyway this tracker models communication with the Audio Coprocessor as a collect
 
 It's still very early but at least now you can load and save songs, and load and save audio firmware configurations. To an extent you should be able to take most GameTank ACP firmwares and get them to do *something*. Though to set it up you might have to do your configuring in a text editor rather than in the GUI for now.
 
+## Windows Builds
+Automatic nightly builds are available at https://gametank.zone/tools/mftracker/win/latest.php
+
+## Everbody else
+Probably easier to let you pull the repo and build it yourself on Linux and Mac tbh.
+Build requirments and instructions are the same as for the GameTank Emulator https://github.com/clydeshaffer/gametankemulator
+
 ## Usage:
 
 After building run it with the repo root (not the build folder) as your working directory so it can pick up its default config files.

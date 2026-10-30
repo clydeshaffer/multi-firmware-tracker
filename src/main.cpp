@@ -99,6 +99,7 @@ void runWriteList(vector<MemWrite> writes) {
 }
 
 void playNote(int channel, int note, int instrument) {
+    if(mainChannelTemplate.instruments.size() <= instrument) return;
     if(mainChannelTemplate.instruments[instrument].vacant) return;
     vector<int> params;
     params.emplace_back(note);
