@@ -1,4 +1,5 @@
 #include "patterns.h"
+#include <cstdint>
 
 PatternLibrary::PatternLibrary() {
     addParam();
