@@ -26,6 +26,24 @@ int ArrayEnvSource::evaluate(int initial, int t) {
     return envelopeData[t];
 }
 
+void ArrayEnvSource::interpolate() {
+    int lastKeyFrameIdx = -1;
+    for(int i = 0; i < envelopeData.size(); ++i) {
+        if(stepIsKeyFrame[i]) {
+            if(lastKeyFrameIdx != -1) {
+                int frameDelta = i - lastKeyFrameIdx;
+                int valueDelta = envelopeData[i] - envelopeData[lastKeyFrameIdx];
+                if(frameDelta > 1) {
+                    for(int inter = 1; inter < frameDelta; ++inter) {
+                        envelopeData[lastKeyFrameIdx + inter] = envelopeData[lastKeyFrameIdx] + ((valueDelta * inter) / frameDelta);
+                    } 
+                }
+            }
+            lastKeyFrameIdx = i;
+        }
+    }
+}
+
 void ArrayEnvSource::draw_instrument_ui() {
     ImGui::TextUnformatted(parent->name.c_str());
     if(ImGui::Button("-")) {
@@ -69,21 +87,7 @@ void ArrayEnvSource::draw_instrument_ui() {
 		envelopeData.back() = lastVal;
     }
     if(wasModified) {
-        int lastKeyFrameIdx = -1;
-        for(int i = 0; i < envelopeData.size(); ++i) {
-            if(stepIsKeyFrame[i]) {
-                if(lastKeyFrameIdx != -1) {
-                    int frameDelta = i - lastKeyFrameIdx;
-                    int valueDelta = envelopeData[i] - envelopeData[lastKeyFrameIdx];
-                    if(frameDelta > 1) {
-                        for(int inter = 1; inter < frameDelta; ++inter) {
-                            envelopeData[lastKeyFrameIdx + inter] = envelopeData[lastKeyFrameIdx] + ((valueDelta * inter) / frameDelta);
-                        } 
-                    }
-                }
-                lastKeyFrameIdx = i;
-            }
-        }
+        interpolate();
     }
 }
 
@@ -111,7 +115,7 @@ void ArrayEnvSourceSpec::scan(std::istream& is) {
 }
 
 void ArrayEnvSource::print(std::ostream& os) const {
-    os << envelopeData.size();
+    os << "-1 " << parent->min << " " << parent->max << " " << envelopeData.size();
     for(int i = 0; i < envelopeData.size(); ++i) {
         if(stepIsKeyFrame[i]) {
             os << " k";
@@ -122,12 +126,10 @@ void ArrayEnvSource::print(std::ostream& os) const {
 }
 
 void ArrayEnvSource::writeBinary(std::ostream& os) const {
-  os.put((char)envelopeData.size());
+    os.put((char)envelopeData.size());
     for(int i = 0; i < envelopeData.size(); ++i) {
-        //os.put((char)(128 - (envelopeData[i] * 8)));
-        os.put((char)((-128 * (envelopeData[i]) / (16)) + 128));
+        os.put((char)((-128 * (envelopeData[i] - parent->min) / (parent->max - parent->min)) + 128));
     }
-   
 }
 
 std::unique_ptr<TimeSeriesSource> ArrayEnvSource::clone() const {
@@ -137,7 +139,20 @@ std::unique_ptr<TimeSeriesSource> ArrayEnvSource::clone() const {
 void ArrayEnvSource::scan(std::istream& is) {
     int arraySize;
     char letter;
+    int min = 0;
+    int max = 16;
+    float scaling = 1.0f;
     is >> arraySize;
+    if(arraySize == -1) {
+        is >> min;
+        is >> max;
+        is >> arraySize;
+    }
+
+    if((min != parent->min) || (max != parent->max)) {
+        scaling = ((float)(parent->max - parent->min)) / ((float)(max - min));
+    }
+
     envelopeData.resize(arraySize);
     stepIsKeyFrame.resize(arraySize);
     for(int i = 0; i < arraySize; ++i) {
@@ -151,7 +166,12 @@ void ArrayEnvSource::scan(std::istream& is) {
             }
             is >> envelopeData[i];
         }
+        envelopeData[i] -= min;
+        envelopeData[i] *= scaling;
+        envelopeData[i] += parent->min;
     }
+
+    interpolate();
 }
 
 ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tsss) {

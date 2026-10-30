@@ -56,6 +56,7 @@ class ArrayEnvSource : public TimeSeriesSource {
         ArrayEnvSourceSpec* parent;
         std::vector<int> envelopeData;
         std::vector<bool> stepIsKeyFrame;
+        void interpolate();
 };
 
 ostream& operator<<(ostream& os, const TimeSeriesSourceSpec& tss);
