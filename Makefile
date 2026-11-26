@@ -73,7 +73,7 @@ ifeq ($(OS), Windows_NT)
 	LINKER_FLAGS = -lmingw32 -lSDL2main -lSDL2 -Wl,-Bstatic -mwindows -lm -ldinput8 -ldxguid -ldxerr8 -luser32 -lgdi32 -lwinmm -limm32 -lcomdlg32 -lole32 -loleaut32 -lshell32 -lversion -luuid -static-libgcc -lsetupapi
 else
 	OBJS += $(NATIVE_OBJS)
-	COMPILER_FLAGS = -g `sdl2-config --cflags` $(EXTRA_INCLUDES)
+	COMPILER_FLAGS = -g `sdl2-config --cflags` $(EXTRA_INCLUDES) -include src/compat.h
 	LINKER_FLAGS = `sdl2-config --libs`
 endif
 
